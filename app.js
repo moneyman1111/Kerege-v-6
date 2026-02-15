@@ -1,7 +1,7 @@
 // Configuration
 const CONFIG = {
     // Replace this with your deployed Google Apps Script URL
-    SCRIPT_URL: 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE'
+    SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbw5OeJk5LXPhEZl9X2i5x2SutdiLldyXcY1mUYiIr0NbA2ckT78jvJ0Ko2EKZ9brrrNwg/exec'
 };
 
 // Global State
@@ -303,11 +303,9 @@ async function submitTest() {
     };
 
     try {
+        // Note: No Content-Type header to avoid CORS preflight
         const response = await fetch(CONFIG.SCRIPT_URL, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
             body: JSON.stringify({
                 action: 'submitResult',
                 data: submission

@@ -123,11 +123,9 @@ async function uploadTest(event) {
         };
 
         // Submit to Google Apps Script
+        // Note: No Content-Type header to avoid CORS preflight
         const response = await fetch(CONFIG.SCRIPT_URL, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
             body: JSON.stringify({
                 action: 'uploadTest',
                 data: testData
