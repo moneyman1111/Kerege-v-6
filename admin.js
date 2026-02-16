@@ -31,6 +31,7 @@ function redirectToLanding() {
 
 // Admin Login
 function adminLogin(event) {
+    console.log('🚀 adminLogin called!'); // FIRST LINE
     event.preventDefault();
 
     const passwordInput = document.getElementById('admin-password');

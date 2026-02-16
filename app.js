@@ -1012,16 +1012,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof loadAdminVideos === 'function') loadAdminVideos(); // Load Videos
     }
 
-    // Override existing adminLogin
-    window.adminLogin = function (event) {
-        event.preventDefault();
-        const password = document.getElementById('admin-password').value;
-        if (password === 'admin123') { // Hardcoded for demo
-            showAdminPanel();
-        } else {
-            alert('Неверный пароль');
-        }
-    }
 
     // Load Videos for Landing Page
     async function loadVideos() {
