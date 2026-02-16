@@ -31,19 +31,10 @@ function redirectToLanding() {
 
 // Admin Login
 function adminLogin(event) {
-    console.log('🚀 adminLogin called!'); // FIRST LINE
     event.preventDefault();
 
     const passwordInput = document.getElementById('admin-password');
     const password = passwordInput ? passwordInput.value : '';
-
-    console.log('🔐 Admin Login Attempt:');
-    console.log('Password entered:', password);
-    console.log('Expected password:', ADMIN_PASSWORD);
-    console.log('Match:', password === ADMIN_PASSWORD);
-
-    // Временная отладка - показать точное сравнение
-    alert(`Введено: "${password}"\nОжидается: "${ADMIN_PASSWORD}"\nСовпадает: ${password === ADMIN_PASSWORD}`);
 
     if (password === ADMIN_PASSWORD) {
         isAdminAuthenticated = true;
@@ -51,9 +42,7 @@ function adminLogin(event) {
         document.getElementById('admin-content').style.display = 'block';
         loadAdminTests();
         loadAdminVideos();
-        console.log('✅ Login successful');
     } else {
-        console.log('❌ Login failed - incorrect password');
         alert('Неверный пароль');
         // Redirect on failed authentication
         redirectToLanding();
