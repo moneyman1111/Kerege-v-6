@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Мои Результаты - Kerege Synak</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .student-dashboard {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .dashboard-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .dashboard-header h1 {
+            font-size: 36px;
+            color: var(--gray-900);
+            margin-bottom: 8px;
+        }
+
+        .dashboard-header p {
+            font-size: 18px;
+            color: var(--gray-600);
+        }
+
+        .results-grid {
+            display: grid;
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
+        .result-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border-left: 4px solid var(--primary-red);
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 2px solid #f3f4f6;
+        }
+
+        .result-title {
+            flex: 1;
+        }
+
+        .result-title h3 {
+            font-size: 20px;
+            color: var(--gray-900);
+            margin-bottom: 4px;
+        }
+
+        .result-date {
+            font-size: 14px;
+            color: var(--gray-500);
+        }
+
+        .ort-score-badge {
+            background: linear-gradient(135deg, #E31E24, #c41a1f);
+            color: white;
+            padding: 16px 24px;
+            border-radius: 8px;
+            text-align: center;
+            min-width: 140px;
+        }
+
+        .ort-score-badge .label {
+            font-size: 11px;
+            opacity: 0.9;
+            margin-bottom: 4px;
+        }
+
+        .ort-score-badge .score {
+            font-size: 36px;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .ort-score-badge .max {
+            font-size: 11px;
+            opacity: 0.8;
+            margin-top: 4px;
+        }
+
+        .result-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 12px;
+            background: #f9fafb;
+            border-radius: 8px;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .stat-value.correct {
+            color: #10b981;
+        }
+
+        .stat-value.incorrect {
+            color: #E31E24;
+        }
+
+        .stat-value.percentage {
+            color: #3b82f6;
+        }
+
+        .stat-label {
+            font-size: 13px;
+            color: var(--gray-600);
+        }
+
+        .topic-analysis-section {
+            margin-top: 24px;
+        }
+
+        .topic-analysis-section h4 {
+            font-size: 18px;
+            color: var(--gray-900);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .topic-item {
+            background: #f9fafb;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            border-left: 4px solid transparent;
+        }
+
+        .topic-item.high {
+            border-left-color: #10b981;
+        }
+
+        .topic-item.medium {
+            border-left-color: #f59e0b;
+        }
+
+        .topic-item.low {
+            border-left-color: #E31E24;
+        }
+
+        .topic-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .topic-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--gray-900);
+        }
+
+        .topic-score {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .topic-percentage {
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .topic-percentage.high {
+            color: #10b981;
+        }
+
+        .topic-percentage.medium {
+            color: #f59e0b;
+        }
+
+        .topic-percentage.low {
+            color: #E31E24;
+        }
+
+        .topic-count {
+            font-size: 14px;
+            color: var(--gray-600);
+        }
+
+        .topic-progress {
+            width: 100%;
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .topic-progress-bar {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+
+        .topic-progress-bar.high {
+            background: #10b981;
+        }
+
+        .topic-progress-bar.medium {
+            background: #f59e0b;
+        }
+
+        .topic-progress-bar.low {
+            background: #E31E24;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 60px 20px;
+        }
+
+        .no-results h2 {
+            font-size: 24px;
+            color: var(--gray-700);
+            margin-bottom: 12px;
+        }
+
+        .no-results p {
+            font-size: 16px;
+            color: var(--gray-500);
+            margin-bottom: 24px;
+        }
+
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+        }
+
+        @media (max-width: 768px) {
+            .result-header {
+                flex-direction: column;
+                gap: 16px;
+            }
+
+            .ort-score-badge {
+                width: 100%;
+            }
+
+            .result-stats {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <h1>Kerege Synak</h1>
+                </div>
+                <nav class="nav-menu">
+                    <a href="index.html" class="nav-link">Главная</a>
+                    <a href="student-results.html" class="nav-link active">Мои Результаты</a>
+                    <a href="about.html" class="nav-link">О нас</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="student-dashboard">
+        <div class="dashboard-header">
+            <h1>📊 Мои Результаты</h1>
+            <p>Просмотрите свои результаты тестов и анализ по темам</p>
+        </div>
+
+        <!-- Search Form -->
+        <div class="result-card" style="margin-bottom: 32px;">
+            <h3 style="margin-bottom: 16px;">🔍 Найти мои результаты</h3>
+            <form id="search-form" style="display: flex; gap: 12px; flex-wrap: wrap;">
+                <input type="text" id="search-phone" placeholder="Введите ваш WhatsApp номер"
+                    style="flex: 1; min-width: 250px; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 16px;"
+                    required>
+                <button type="submit" class="btn btn-primary" style="padding: 12px 32px;">
+                    Найти результаты
+                </button>
+            </form>
+        </div>
+
+        <!-- Results Container -->
+        <div id="results-container" class="results-grid">
+            <!-- Results will be loaded here -->
+        </div>
+
+        <!-- No Results State -->
+        <div id="no-results" class="no-results" style="display: none;">
+            <div class="empty-state-icon">📝</div>
+            <h2>Результаты не найдены</h2>
+            <p>Введите ваш номер WhatsApp для поиска результатов тестов</p>
+            <a href="index.html" class="btn btn-primary">Пройти тест</a>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2024 Kerege Synak. Все права защищены.</p>
+        </div>
+    </footer>
+
+    <!-- Supabase Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script src="student-results.js"></script>
+</body>
+
+</html>

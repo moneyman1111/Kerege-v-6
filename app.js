@@ -1,6 +1,20 @@
 // Kerege Synak - ORT Testing Platform
 // Main Application Logic
 
+// Global State Variables
+let currentTest = null;
+let answers = {};
+let answerHistory = {}; // Track all answer changes for ORT Circle-to-Square
+let testStartTime = null;
+let sectionStartTime = null;
+let timerInterval = null;
+let timeRemaining = 0;
+
+// ORT Multi-Section Variables
+let testStructure = null;
+let currentSection = 0;
+let isOnBreak = false;
+
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
     loadTests();
@@ -461,6 +475,41 @@ function clearTimer() {
     }
 }
 
+// Start a specific section of ORT test
+function startSection(sectionIndex) {
+    if (!testStructure || sectionIndex >= testStructure.sections.length) {
+        // Test complete
+        submitTest();
+        return;
+    }
+
+    const section = testStructure.sections[sectionIndex];
+
+    if (section.isBreak) {
+        // Show break screen with ads
+        if (typeof showBreakScreen === 'function') {
+            showBreakScreen(section.duration);
+        } else {
+            // Fallback: auto-advance after break
+            setTimeout(() => {
+                currentSection++;
+                startSection(currentSection);
+            }, section.duration * 60 * 1000);
+        }
+    } else {
+        // Update UI for new section
+        const sectionTitle = `${currentTest.name} - ${section.name}`;
+        const titleEl = document.getElementById('test-title');
+        if (titleEl) {
+            titleEl.textContent = sectionTitle;
+        }
+
+        // Start timer for this section
+        startTimer(section.duration);
+        sectionStartTime = Date.now();
+    }
+}
+
 // Image Zoom
 function zoomImage() {
     document.getElementById('image-modal').classList.add('active');
@@ -634,15 +683,6 @@ const MOCK_TESTS = [
     }
 ];
 
-// Configuration
-const CONFIG = {
-    SCRIPT_URL: 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE'
-};
-
-// CONFIGURATION - Supabase
-const SUPABASE_URL = 'https://ourguzxerqecmyyoodgl.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91cmd1enhlcnFlY215eW9vZ2dsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzk0NTQ5NzgsImV4cCI6MjA1NTAzMDk3OH0.qQKWVZSLhMWRRRmVKhPJCRGJWxYQRHJNQZqbQwWNmBY';
-
 // ORT Test Structures
 const ORT_STRUCTURES = {
     'math': {
@@ -664,23 +704,14 @@ const ORT_STRUCTURES = {
 };
 
 // Initialize Supabase Client
-const supabaseApp = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+const SUPABASE_URL = 'https://jxlpuqbmjvqrqsqxqvkl.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4bHB1cWJtanZxcnFzcXhxdmtsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzk0NTQzNTEsImV4cCI6MjA1NTAzMDM1MX0.Kw_yxLGqZOECZXvVIGWHUGNJWlbCJSjPBMxqaT8Ypzs';
+const supabaseApp = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 // Expose for Admin script (compatibility)
 window.supabaseClient = supabaseApp;
 
-// Global State
-let currentTest = null;
+// Additional state
 let studentData = null;
-let answers = {};
-let testStartTime = null;
-let timerInterval = null;
-
-// ORT-Specific State Variables
-let answerHistory = {}; // Track answer changes: { questionId: [answer1, answer2, answer3] }
-let currentSection = 0;
-let testStructure = null;
-let sectionStartTime = null;
-let isOnBreak = false;
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
@@ -1061,3 +1092,4 @@ document.addEventListener('DOMContentLoaded', () => {
         // loadTests(); - already called in line 43
         loadVideos();
     });
+});
