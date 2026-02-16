@@ -898,13 +898,18 @@ document.addEventListener('DOMContentLoaded', () => {
             <td style="padding: 12px;">
                 <span style="color: #444;">Родитель</span><br>
                 <a href="tel:+${cleanParent}" style="color: #666; text-decoration: none; margin-right: 8px;">📞 Позвонить</a>
-                ${cleanParent ? `<a href="https://wa.me/${cleanParent}" target="_blank" style="color: #25D366; text-decoration: none;">💬 WA</a>` : ''}
+                ${cleanParent ? `<a href="https://wa.me/${cleanParent}" target="_blank" style="color: #25D366; text-decoration: none;">💬 WhatsApp</a>` : ''}
             </td>
             <td style="padding: 12px;">${region}</td>
-            <td style="padding: 12px;">${row.test_name || 'Тест'}</td>
+            <td style="padding: 12px;">${row.test_name || '-'}</td>
             <td style="padding: 12px;">
-                <span style="font-weight: bold; color: #E31E24;">${row.score}</span>
+                <span style="font-weight: bold; color: #E31E24;">${row.scaled_score || row.score || '-'}</span>
                 <br><small>Пр: ${row.correct_count}</small>
+            </td>
+            <td style="padding: 12px;">
+                <button onclick="deleteStudent('${row.id}')" class="btn-delete" style="background: #e31e24; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 14px; transition: background 0.3s;" onmouseover="this.style.background='#c01a1f'" onmouseout="this.style.background='#e31e24'" title="Удалить студента">
+                    🗑️ Удалить
+                </button>
             </td>
             <td style="padding: 12px;">
                 <button class="btn-sm" onclick='generateCertificate(${JSON.stringify(row)})' style="padding: 6px 12px; background: #E31E24; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">

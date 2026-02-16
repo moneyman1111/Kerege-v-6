@@ -535,6 +535,45 @@ async function deleteVideo(id) {
     }
 }
 
+// Delete Student from CRM
+async function deleteStudent(studentId) {
+    if (!window.supabaseClient) {
+        alert('Supabase не подключен');
+        return;
+    }
+
+    // Get student name for confirmation
+    const row = document.querySelector(`button[onclick="deleteStudent('${studentId}')"]`)?.closest('tr');
+    const studentName = row?.querySelector('td:nth-child(2)')?.textContent.split('\n')[0] || 'этого студента';
+
+    if (!confirm(`Удалить студента "${studentName}"?\n\nЭто действие нельзя отменить!`)) {
+        return;
+    }
+
+    try {
+        const { error } = await window.supabaseClient
+            .from('student_results')
+            .delete()
+            .eq('id', studentId);
+
+        if (error) throw error;
+
+        alert('Студент успешно удален');
+
+        // Reload student results
+        if (typeof loadStudentResults === 'function') {
+            loadStudentResults();
+        }
+
+    } catch (e) {
+        console.error('Error deleting student:', e);
+        alert('Ошибка удаления студента: ' + e.message);
+    }
+}
+
+// Make deleteStudent globally accessible
+window.deleteStudent = deleteStudent;
+
 // Make loadAdminVideos global so app.js can call it
 window.loadAdminVideos = async function () {
     const container = document.getElementById('admin-videos-list');
