@@ -1,0 +1,58 @@
+/* Timer Warning Styles */
+.timer-warning {
+    color: #f59e0b !important;
+    animation: pulse-warning 1s ease-in-out infinite;
+}
+
+.timer-critical {
+    color: #E31E24 !important;
+    animation: pulse-critical 0.5s ease-in-out infinite;
+}
+
+@keyframes pulse-warning {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.7;
+    }
+}
+
+@keyframes pulse-critical {
+
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0.8;
+        transform: scale(1.05);
+    }
+}
+
+.timer-toast {
+    position: fixed;
+    top: 100px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-20px);
+    background: rgba(227, 30, 36, 0.95);
+    color: white;
+    padding: 16px 32px;
+    border-radius: 8px;
+    font-size: 18px;
+    font-weight: 700;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 10000;
+    opacity: 0;
+    transition: all 0.3s ease;
+}
+
+.timer-toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
