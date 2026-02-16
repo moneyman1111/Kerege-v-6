@@ -704,8 +704,8 @@ const ORT_STRUCTURES = {
 };
 
 // Initialize Supabase Client
-const SUPABASE_URL = 'https://jxlpuqbmjvqrqsqxqvkl.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4bHB1cWJtanZxcnFzcXhxdmtsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzk0NTQzNTEsImV4cCI6MjA1NTAzMDM1MX0.Kw_yxLGqZOECZXvVIGWHUGNJWlbCJSjPBMxqaT8Ypzs';
+const SUPABASE_URL = 'https://ourguzxerqecmyyoodgl.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91cmd1enhlcnFlY215eW9vZGdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExMjA4NTYsImV4cCI6MjA4NjY5Njg1Nn0.p1kyHqwHZphZmYeZ_Ymp6L72KKvD8TP3UJCdcv75xLo';
 const supabaseApp = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 // Expose for Admin script (compatibility)
 window.supabaseClient = supabaseApp;

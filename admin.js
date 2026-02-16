@@ -33,7 +33,16 @@ function redirectToLanding() {
 function adminLogin(event) {
     event.preventDefault();
 
-    const password = document.getElementById('admin-password').value;
+    const passwordInput = document.getElementById('admin-password');
+    const password = passwordInput ? passwordInput.value : '';
+
+    console.log('🔐 Admin Login Attempt:');
+    console.log('Password entered:', password);
+    console.log('Expected password:', ADMIN_PASSWORD);
+    console.log('Match:', password === ADMIN_PASSWORD);
+
+    // Временная отладка - показать точное сравнение
+    alert(`Введено: "${password}"\nОжидается: "${ADMIN_PASSWORD}"\nСовпадает: ${password === ADMIN_PASSWORD}`);
 
     if (password === ADMIN_PASSWORD) {
         isAdminAuthenticated = true;
@@ -41,12 +50,47 @@ function adminLogin(event) {
         document.getElementById('admin-content').style.display = 'block';
         loadAdminTests();
         loadAdminVideos();
+        console.log('✅ Login successful');
     } else {
+        console.log('❌ Login failed - incorrect password');
         alert('Неверный пароль');
         // Redirect on failed authentication
         redirectToLanding();
     }
 }
+
+// Toggle Password Visibility
+function togglePasswordVisibility() {
+    const passwordInput = document.getElementById('admin-password');
+    const toggleIcon = document.getElementById('password-toggle-icon');
+
+    if (passwordInput.type === 'password') {
+        passwordInput.type = 'text';
+        toggleIcon.textContent = '🙈'; // Закрытый глаз
+    } else {
+        passwordInput.type = 'password';
+        toggleIcon.textContent = '👁️'; // Открытый глаз
+    }
+}
+
+// Expose functions globally for HTML onclick/onsubmit
+window.adminLogin = adminLogin;
+window.togglePasswordVisibility = togglePasswordVisibility;
+window.redirectToLanding = redirectToLanding;
+
+// Initialize admin form when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('🔧 Admin.js loaded');
+
+    // Find the admin login form
+    const adminForm = document.querySelector('#admin-login form');
+    if (adminForm) {
+        console.log('✅ Admin form found, attaching event listener');
+        adminForm.addEventListener('submit', adminLogin);
+    } else {
+        console.log('⚠️ Admin form not found yet');
+    }
+});
 
 // Load Tests for Admin
 async function loadAdminTests() {

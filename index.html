@@ -326,8 +326,6 @@
     </div>
 
     <!-- jsPDF for Certificates -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
     <!-- Admin Panel -->
     <div id="admin-page" class="page">
@@ -342,7 +340,13 @@
                 <form onsubmit="adminLogin(event)">
                     <div class="form-group">
                         <label for="admin-password">Пароль</label>
-                        <input type="password" id="admin-password" required>
+                        <div style="position: relative;">
+                            <input type="password" id="admin-password" required style="padding-right: 45px;">
+                            <button type="button" onclick="togglePasswordVisibility()"
+                                style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 18px; padding: 5px;">
+                                <span id="password-toggle-icon">👁️</span>
+                            </button>
+                        </div>
                     </div>
                     <button type="submit" class="btn btn-primary">Войти</button>
                 </form>
