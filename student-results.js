@@ -56,7 +56,7 @@ async function loadResults(phone) {
 
         // Query Supabase
         const { data, error } = await supabase
-            .from('test_results')
+            .from('crm_student_results')
             .select('*')
             .or(`parent_phone.ilike.%${normalizedPhone}%,whatsapp.ilike.%${normalizedPhone}%`)
             .order('created_at', { ascending: false });

@@ -1,21 +1,20 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ky">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co https://cdn.jsdelivr.net;">
-    <title>KEREGE Synak - Подготовка к ОРТ</title>
+
+    <title>KEREGE Synak - ЖРТга даярдануу</title>
     <meta name="description"
-        content="Сдай ОРТ на 200+ баллов с KEREGE Synak. Проверь свои силы на реальных тестах прошлых лет.">
+        content="KEREGE Synak менен ЖРТдан 200+ балл ал. Өткөн жылдардын чыныгы тесттеринде күчүңдү сына.">
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="test-constructor.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-
-    <!-- Supabase Client -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- SheetJS for Excel import -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 </head>
 
 <body>
@@ -35,9 +34,9 @@
                     </button>
 
                     <nav class="nav-menu">
-                        <a href="#" onclick="showHome()" class="nav-link active">Главная</a>
-                        <a href="#tests" onclick="scrollToTests()" class="nav-link">Тесты</a>
-                        <a href="#about" onclick="showAbout()" class="nav-link">О компании</a>
+                        <a href="#" onclick="showHome()" class="nav-link active">Башкы бет</a>
+                        <a href="#tests" onclick="scrollToTests()" class="nav-link">Тесттер</a>
+                        <a href="#about" onclick="showAbout()" class="nav-link">Биз жөнүндө</a>
                     </nav>
                 </div>
             </div>
@@ -46,32 +45,34 @@
         <!-- Hero Section -->
         <section class="hero">
             <div class="container">
-                <h1 class="hero-title">Сдай ОРТ на 200+ баллов с Kerege Synak</h1>
-                <p class="hero-subtitle">Проверь свои силы на реальных тестах прошлых лет. Получи моментальный разбор и
-                    консультацию от экспертов.</p>
-                <button class="btn btn-primary" onclick="scrollToTests()">Выбрать тест</button>
+                <h1 class="hero-title">Кереге окуу борбору менен 200+ баллга жет</h1>
+                <p class="hero-subtitle">Бул тест сенин чыныгы деңгээлиңди аныктайт. Тесттен кийин эксперттер кайсы
+                    темалардан кыйналып жатканыңды аныктап консультация беришет. Тестти кантип тапшыруу тууралуу
+                    колдонмо Бул сенин 200+ баллга жеткирүүчү жардамчың.</p>
+                <button class="btn btn-primary" onclick="scrollToTests()">Тестти тандаңыз</button>
             </div>
         </section>
 
         <!-- Problems Section -->
         <section class="problems">
             <div class="container">
-                <h2 class="section-title">Знакомо?</h2>
-                <div class="cards-grid">
+                <h2 class="section-title">Таанышпы?</h2>
+                <div id="problems-container" class="cards-grid">
+                    <!-- Default content will be replaced by JS if DB connection works -->
                     <div class="card">
                         <div class="card-icon">😰</div>
-                        <h3 class="card-title">Страх перед неизвестностью?</h3>
-                        <p class="card-text">Наши тесты полностью копируют формат реального ЖРТ</p>
+                        <h3 class="card-title">Белгисиздиктен коркосуңбу?</h3>
+                        <p class="card-text">Биздин тесттер чыныгы ЖРТнын форматын толук кайталайт</p>
                     </div>
                     <div class="card">
                         <div class="card-icon">⏰</div>
-                        <h3 class="card-title">Не хватает времени?</h3>
-                        <p class="card-text">Встроенный таймер научит тебя распределять силы</p>
+                        <h3 class="card-title">Убакыт жетпейби?</h3>
+                        <p class="card-text">Орнотулган таймер күчтү туура бөлүштүрүүгө үйрөтөт</p>
                     </div>
                     <div class="card">
                         <div class="card-icon">📚</div>
-                        <h3 class="card-title">Сложные темы?</h3>
-                        <p class="card-text">Узнай свои слабые места до экзамена, а не на нем</p>
+                        <h3 class="card-title">Кыйын темалар барбы?</h3>
+                        <p class="card-text">Алсыз жактарыңды экзаменге чейин бил, андагыдан эмес</p>
                     </div>
                 </div>
             </div>
@@ -80,18 +81,19 @@
         <!-- Solution Section -->
         <section class="solution">
             <div class="container">
-                <h2 class="section-title">Kerege Synak - твоя дорожная карта к успеху</h2>
-                <p class="solution-text">Это не просто тесты. Это твоя дорожная карта к бюджетному обучению. Мы
-                    анализируем каждый твой ответ и даем персональные рекомендации.</p>
+                <h2 class="section-title">Kerege Synak - сенин ийгиликке жеткен жол картаң</h2>
+                <p class="solution-text">Бул жөн гана тест эмес. Бул сени эң алдыңкы окуу жайларга өткөрчү жол карта.
+                    Биз сенин ар жообуңду анализдеп туура жана эң натыйжалуу даярнуунун стратегиялык планын түзүп
+                    беребиз.</p>
             </div>
         </section>
         <!-- Video Section -->
         <section class="video-section" id="videos-section">
             <div class="container">
-                <h2 class="section-title">Видео уроки</h2>
+                <h2 class="section-title">Видео сабактар</h2>
                 <div id="videos-list" class="videos-grid">
                     <div class="video-card" style="padding: 20px; text-align: center;">
-                        <p>Загрузка видео...</p>
+                        <p>Видео жүктөлүүдө...</p>
                     </div>
                 </div>
             </div>
@@ -100,10 +102,10 @@
         <!-- Test Selection Section -->
         <section class="test-selection" id="test-selection">
             <div class="container">
-                <h2 class="section-title">Выбери тест</h2>
+                <h2 class="section-title">Тест тандаңыз</h2>
                 <div id="tests-list" class="tests-grid">
                     <div class="test-card loading">
-                        <p>Загрузка тестов...</p>
+                        <p>Тесттер жүктөлүүдө...</p>
                     </div>
                 </div>
             </div>
@@ -126,9 +128,9 @@
                     </button>
 
                     <nav class="nav-menu">
-                        <a href="#" onclick="showHome()" class="nav-link">Главная</a>
-                        <a href="#tests" onclick="scrollToTests()" class="nav-link">Тесты</a>
-                        <a href="#about" onclick="showAbout()" class="nav-link active">О компании</a>
+                        <a href="#" onclick="showHome()" class="nav-link">Башкы бет</a>
+                        <a href="#tests" onclick="scrollToTests()" class="nav-link">Тесттер</a>
+                        <a href="#about" onclick="showAbout()" class="nav-link active">Биз жөнүндө</a>
                     </nav>
                 </div>
             </div>
@@ -138,8 +140,8 @@
         <section class="about-hero">
             <div class="container">
                 <div class="about-hero-content">
-                    <h1 class="about-title">Центр подготовки «KEREGE»</h1>
-                    <p class="about-slogan">Твой путь к успеху начинается здесь</p>
+                    <h1 class="about-title">«KEREGE» окуу даярдоо борбору</h1>
+                    <p class="about-slogan">Ийгиликке баруучу жолуң ушул жерден башталат</p>
                 </div>
             </div>
         </section>
@@ -147,17 +149,17 @@
         <!-- About Us Section -->
         <section class="about-us">
             <div class="container">
-                <h2 class="section-title">О нас</h2>
+                <h2 class="section-title">Биз жөнүндө</h2>
                 <div class="about-content">
                     <p class="about-description">
-                        <strong>KEREGE</strong>- это профессиональный центр подготовки к ОРТ/ЖРТ, который
-                        помогает
-                        абитуриентам Кыргызстана успешно сдать экзамены и поступить в лучшие вузы страны.
+                        <strong>KEREGE</strong> — ОРТ/ЖРТга даярдоочу профессионал борбор. Кыргызстандын
+                        абитуриенттерине ийгиликтүү экзамен тапшырып, өлкөнүн эң мыкты жогорку окуу жайларына
+                        кирүүгө жардам берет.
                     </p>
                     <p class="about-description">
-                        Наша миссия - сделать качественную подготовку к ОРТ доступной каждому студенту. Мы используем
-                        реальные тесты прошлых лет, предоставляем детальный анализ результатов и индивидуальные
-                        рекомендации для улучшения показателей.
+                        Биздин миссия — ОРТка сапаттуу даярдалууну ар бир студентке жеткиликтүү кылуу.
+                        Биз өткөн жылдардын чыныгы тесттерин колдонобуз, натыйжаларды терең талдап, жекелештирилген
+                        сунуштарды беребиз.
                     </p>
                 </div>
 
@@ -165,19 +167,19 @@
                 <div class="stats-grid">
                     <div class="stat-card">
                         <div class="stat-number">2020</div>
-                        <div class="stat-label">Год основания</div>
+                        <div class="stat-label">Негизделген жыл</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-number">5+</div>
-                        <div class="stat-label">Лет на рынке</div>
+                        <div class="stat-label">Жылдар тажрыйба</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-number">1000+</div>
-                        <div class="stat-label">Успешных выпускников</div>
+                        <div class="stat-label">Ийгиликтүү бүтүрүүчүлөр</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-number">180+</div>
-                        <div class="stat-label">Средний балл ОРТ</div>
+                        <div class="stat-label">ОРТ орточо балл</div>
                     </div>
                 </div>
             </div>
@@ -186,8 +188,8 @@
         <!-- Team Section -->
         <section class="team-section">
             <div class="container">
-                <h2 class="section-title">Наша команда</h2>
-                <p class="section-subtitle">Профессиональные преподаватели с многолетним опытом</p>
+                <h2 class="section-title">Биздин команда</h2>
+                <p class="section-subtitle">Көп жылдык тажрыйбасы бар профессионал мугалимдер</p>
 
                 <div class="team-grid">
                     <div class="team-card">
@@ -196,18 +198,18 @@
                         </div>
                         <h3 class="team-name">Азамат Исаков</h3>
                         <p class="team-subject">Математика</p>
-                        <p class="team-experience">10+ лет опыта</p>
-                        <p class="team-achievement">Более 200 студентов набрали 190+ баллов</p>
+                        <p class="team-experience">10+ жыл тажрыйба</p>
+                        <p class="team-achievement">200дөн ашуун студент 190+ балл алды</p>
                     </div>
 
                     <div class="team-card">
                         <div class="team-photo">
                             <div class="team-avatar">👩‍🏫</div>
                         </div>
-                        <h3 class="team-name">Айгуль Токтогулова</h3>
-                        <p class="team-subject">Логика и Аналогии</p>
-                        <p class="team-experience">8+ лет опыта</p>
-                        <p class="team-achievement">Автор уникальной методики решения аналогий</p>
+                        <h3 class="team-name">Айгүл Токтогулова</h3>
+                        <p class="team-subject">Логика жана Аналогиялар</p>
+                        <p class="team-experience">8+ жыл тажрыйба</p>
+                        <p class="team-achievement">Аналогияларды чечүүнүн уникалдуу методикасынын автору</p>
                     </div>
 
                     <div class="team-card">
@@ -215,19 +217,19 @@
                             <div class="team-avatar">👨‍💼</div>
                         </div>
                         <h3 class="team-name">Бекжан Осмонов</h3>
-                        <p class="team-subject">Методист и координатор</p>
-                        <p class="team-experience">12+ лет опыта</p>
-                        <p class="team-achievement">Разработал систему персонализированной подготовки</p>
+                        <p class="team-subject">Методист жана координатор</p>
+                        <p class="team-experience">12+ жыл тажрыйба</p>
+                        <p class="team-achievement">Жекелештирилген даярдануу системасын иштеп чыкты</p>
                     </div>
 
                     <div class="team-card">
                         <div class="team-photo">
                             <div class="team-avatar">👩‍💻</div>
                         </div>
-                        <h3 class="team-name">Гульнара Асанова</h3>
-                        <p class="team-subject">Чтение и Грамматика</p>
-                        <p class="team-experience">7+ лет опыта</p>
-                        <p class="team-achievement">Эксперт по текстовым заданиям ОРТ</p>
+                        <h3 class="team-name">Гүлнара Асанова</h3>
+                        <p class="team-subject">Окуу жана Грамматика</p>
+                        <p class="team-experience">7+ жыл тажрыйба</p>
+                        <p class="team-achievement">ОРТтун текст тапшырмаларынын эксперти</p>
                     </div>
                 </div>
             </div>
@@ -237,8 +239,8 @@
         <section class="contact-section">
             <div class="container">
                 <div class="contact-content">
-                    <h2 class="section-title">Свяжитесь с нами</h2>
-                    <p class="contact-subtitle">Готовы начать подготовку? Мы всегда на связи!</p>
+                    <h2 class="section-title">Биз менен байланышыңыз</h2>
+                    <p class="contact-subtitle">Даярдалууга даарсыңбы? Биз дайым жеткиликтүүбүз!</p>
 
                     <div class="social-links">
                         <a href="https://instagram.com/kerege.synak" target="_blank" class="social-link instagram">
@@ -262,11 +264,11 @@
                             <path
                                 d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56-.35-.12-.74-.03-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z" />
                         </svg>
-                        Позвонить сейчас
+                        Азыр чалыңыз
                     </a>
 
                     <p class="contact-info">+996 555 123 456</p>
-                    <p class="contact-address">г. Бишкек, ул. Примерная, 123</p>
+                    <p class="contact-address">Бишкек ш., Үлгүлүү көч., 123</p>
                 </div>
             </div>
         </section>
@@ -276,23 +278,53 @@
     <div id="lead-modal" class="modal">
         <div class="modal-content">
             <span class="close" onclick="closeLeadForm()">&times;</span>
-            <h2 class="modal-title">Начни свой путь к успеху</h2>
-            <p class="modal-subtitle">Чтобы начать, заполни данные. Мы отправим подробный анализ твоих результатов тебе
-                в WhatsApp</p>
+            <h2 class="modal-title">Ийгиликке баруучу жолду баштаңыз</h2>
+            <p class="modal-subtitle">Баштоо үчүн маалыматтарды толтур. Натыйжалардын толук анализин
+                WhatsApp аркылуу жөнөтөбүз</p>
             <form id="lead-form" onsubmit="submitLeadForm(event)">
                 <div class="form-group">
-                    <label for="firstName">Имя</label>
+                    <label for="firstName">Атыңыз</label>
                     <input type="text" id="firstName" name="firstName" required>
                 </div>
                 <div class="form-group">
-                    <label for="lastName">Фамилия</label>
+                    <label for="lastName">Фамилияңыз</label>
                     <input type="text" id="lastName" name="lastName" required>
                 </div>
                 <div class="form-group">
-                    <label for="whatsapp">Номер WhatsApp</label>
+                    <label for="whatsapp">WhatsApp номери</label>
                     <input type="tel" id="whatsapp" name="whatsapp" placeholder="+996 ___ __ __ __" required>
                 </div>
-                <button type="submit" class="btn btn-primary">Начать тест</button>
+
+                <!-- New Lead Generation Fields -->
+                <div class="form-group">
+                    <label for="region">Регион</label>
+                    <select id="region" name="region" required>
+                        <option value="">Регионду тандаңыз</option>
+                        <option value="Бишкек">Бишкек</option>
+                        <option value="Ош">Ош</option>
+                        <option value="Джалал-Абад">Жалал-Абад</option>
+                        <option value="Баткен">Баткен</option>
+                        <option value="Нарын">Нарын</option>
+                        <option value="Талас">Талас</option>
+                        <option value="Иссык-Куль">Ысык-Көл</option>
+                        <option value="Чуй">Чүй</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="oblast">Облус/Район</label>
+                    <input type="text" id="oblast" name="oblast" placeholder="Мисалы: Ленин району" required>
+                </div>
+                <div class="form-group">
+                    <label for="parentPhone">Ата-эненин номери</label>
+                    <input type="tel" id="parentPhone" name="parentPhone" placeholder="+996 ___ __ __ __" required>
+                </div>
+                <div class="form-group">
+                    <label for="parentName">Ата-эненин аты</label>
+                    <input type="text" id="parentName" name="parentName" placeholder="Мисалы: Айгүл Токтомушевна"
+                        required>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Тестти баштоо</button>
             </form>
         </div>
     </div>
@@ -308,20 +340,68 @@
             </div>
         </div>
         <div class="test-container">
-            <div class="test-image-section">
-                <img id="test-image" src="" alt="Тест" onclick="zoomImage()">
-                <div id="image-modal" class="image-modal" onclick="closeZoom()">
+            <div class="test-image-section" onclick="zoomImage()" style="cursor: pointer;">
+                <img id="test-image" src="" alt="Тест">
+                <button class="zoom-btn">🔍</button>
+                <div id="image-modal" class="image-modal" onclick="closeZoom(event)">
                     <span class="close-zoom">&times;</span>
                     <img id="zoomed-image" src="" alt="Увеличенное изображение">
                 </div>
             </div>
+
+            <!-- Image Navigation Controls -->
+            <div id="image-controls" class="image-controls" style="display: none;">
+                <button class="nav-btn prev-btn" onclick="prevImage()">❮ Артка</button>
+                <span id="page-counter">Бет. 1 / 1</span>
+                <button class="nav-btn next-btn" onclick="nextImage()">Алдыга ❯</button>
+            </div>
+
             <div class="answer-section">
-                <h3>Введите ваши ответы</h3>
+                <h3>Жоопторуңузду белгилеңиз</h3>
                 <div id="answer-grid" class="answer-grid">
                     <!-- Generated dynamically -->
                 </div>
-                <button class="btn btn-primary" onclick="submitTest()">Завершить тест</button>
+                <button class="btn btn-primary" onclick="submitTest()">Тестти аяктоо</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Success Modal for Lead Generation -->
+    <div id="success-modal" class="modal">
+        <div class="modal-content success-modal-content">
+            <span class="close" onclick="closeSuccessModal()">&times;</span>
+            <div class="success-icon">🎉</div>
+            <h2 class="modal-title">Тест үчүн рахмат!</h2>
+            <p class="modal-subtitle">Натыйжалар мугалимдерибизге жөнөтүлдү.</p>
+
+            <div class="success-card">
+                <div class="card-icon">📊</div>
+                <h3>Толук талдоону алыңыз</h3>
+                <p>Натыйжалардын толук анализи жана жеке консультация алуу үчүн
+                    менеджерибиз менен байланышыңыз:</p>
+            </div>
+
+            <div class="contact-buttons">
+                <a href="https://wa.me/996555123456?text=Саламатсызбы! Мен сиздердин сайттан тест тапшырдым жана натыйжаларды алгым келет."
+                    target="_blank" class="btn btn-whatsapp">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 8px;">
+                        <path
+                            d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
+                    </svg>
+                    WhatsApp жазуу
+                </a>
+                <a href="tel:+996555123456" class="btn btn-call">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 8px;">
+                        <path
+                            d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56-.35-.12-.74-.03-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z" />
+                    </svg>
+                    Чалуу
+                </a>
+            </div>
+
+            <button class="btn btn-secondary" onclick="closeSuccessModal()" style="margin-top: 16px; width: 100%;">
+                Башкы бетке кайтуу
+            </button>
         </div>
     </div>
 
@@ -354,138 +434,276 @@
 
             <div id="admin-content" class="admin-content" style="display: none;">
 
-                <!-- CRM / Results Section -->
-                <div class="admin-section">
-                    <h2>📊 Результаты студентов (CRM)</h2>
-                    <div class="crm-controls" style="display: flex; gap: 10px; margin-bottom: 20px;">
-                        <input type="text" id="crm-search" placeholder="Поиск по имени или телефону..."
-                            onkeyup="filterResults()"
-                            style="padding: 10px; flex: 1; border: 1px solid #ddd; border-radius: 6px;">
-                        <button class="btn btn-primary" onclick="loadStudentResults()">Обновить</button>
-                    </div>
-                    <div class="table-container" style="overflow-x: auto;">
-                        <table id="results-table" style="width: 100%; border-collapse: collapse;">
-                            <thead>
-                                <tr style="background: #f5f5f5; text-align: left;">
-                                    <th style="padding: 12px; border-bottom: 2px solid #ddd;">Дата</th>
-                                    <th style="padding: 12px; border-bottom: 2px solid #ddd;">Студент</th>
-                                    <th style="padding: 12px; border-bottom: 2px solid #ddd;">Родитель</th>
-                                    <th style="padding: 12px; border-bottom: 2px solid #ddd;">Регион</th>
-                                    <th style="padding: 12px; border-bottom: 2px solid #ddd;">Тест</th>
-                                    <th style="padding: 12px; border-bottom: 2px solid #ddd;">Балл ОРТ</th>
-                                    <th style="padding: 12px; border-bottom: 2px solid #ddd;">Удалить</th>
-                                    <th style="padding: 12px; border-bottom: 2px solid #ddd;">Сертификат</th>
-                                </tr>
-                            </thead>
-                            <tbody id="results-body">
-                                <!-- Populated via JS -->
-                            </tbody>
-                        </table>
+                <!-- Admin Navigation -->
+                <div class="admin-nav">
+                    <button class="burger-btn" onclick="toggleAdminMenu()">
+                        <span></span><span></span><span></span>
+                    </button>
+                    <h2 id="current-section-title">📊 CRM</h2>
+                </div>
+
+                <!-- Dropdown Menu -->
+                <div id="admin-menu" class="admin-menu">
+                    <button class="menu-item active" onclick="switchAdminSection('crm', '📊 CRM')">📊 Результаты
+                        студентов</button>
+                    <button class="menu-item" onclick="switchAdminSection('tests', '📝 Управление тестами')">📝
+                        Загрузить / Список тестов</button>
+                    <button class="menu-item" onclick="switchAdminSection('videos', '🎥 Видео уроки')">🎥 Видео
+                        уроки</button>
+                    <button class="menu-item" onclick="switchAdminSection('cms', '✍️ Управление текстами')">✍️ CMS
+                        (Тексты)</button>
+                    <button class="menu-item" onclick="redirectToLanding()"
+                        style="color: #E31E24; border-top: 1px solid #eee;">🚪 Выход</button>
+                </div>
+
+                <!-- 1. CRM Section -->
+                <div id="section-crm" class="admin-tab active">
+                    <div class="admin-section">
+                        <h2>Результаты студентов</h2>
+                        <div class="crm-controls" style="display: flex; gap: 10px; margin-bottom: 20px;">
+                            <input type="text" id="crm-search" placeholder="Поиск по имени или телефону..."
+                                onkeyup="filterResults()"
+                                style="padding: 10px; flex: 1; border: 1px solid #ddd; border-radius: 6px;">
+                            <button class="btn btn-primary" onclick="loadStudentResults()">Обновить</button>
+                        </div>
+                        <div class="table-container" style="overflow-x: auto;">
+                            <table id="results-table" style="width: 100%; border-collapse: collapse;">
+                                <thead>
+                                    <tr style="background: #f5f5f5; text-align: left;">
+                                        <th style="padding: 12px; border-bottom: 2px solid #ddd;">Дата</th>
+                                        <th style="padding: 12px; border-bottom: 2px solid #ddd;">Студент</th>
+                                        <th style="padding: 12px; border-bottom: 2px solid #ddd;">Родитель</th>
+                                        <th style="padding: 12px; border-bottom: 2px solid #ddd;">Регион</th>
+                                        <th style="padding: 12px; border-bottom: 2px solid #ddd;">Тест</th>
+                                        <th style="padding: 12px; border-bottom: 2px solid #ddd;">Балл ОРТ</th>
+                                        <th style="padding: 12px; border-bottom: 2px solid #ddd;">⚠️ Слабые темы</th>
+                                        <th style="padding: 12px; border-bottom: 2px solid #ddd;">Удалить</th>
+                                        <th style="padding: 12px; border-bottom: 2px solid #ddd;">Сертификат</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="results-body">
+                                    <!-- Populated via JS -->
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
-                <div class="admin-section">
-                    <h2>Загрузить новый тест</h2>
-                    <form id="upload-test-form" onsubmit="uploadTest(event)">
-                        <div class="form-group">
-                            <label for="test-name">Название теста</label>
-                            <input type="text" id="test-name" required placeholder="Например: Математика 2024">
-                        </div>
-                        <div class="form-group">
-                            <label for="test-language">Язык</label>
-                            <select id="test-language" required>
-                                <option value="RU">Русский</option>
-                                <option value="KG">Кыргызский</option>
+                <!-- 2. Tests Section — Test Constructor -->
+                <div id="section-tests" class="admin-tab">
+
+                    <!-- ═══ TEST CONSTRUCTOR ═══ -->
+                    <div id="test-constructor-wrapper">
+
+                        <!-- Top Meta Bar -->
+                        <div class="tc-meta-bar">
+                            <input type="text" id="tc-test-name" placeholder="Название теста..."
+                                oninput="tcAutoSaveTrigger()" title="Название теста">
+                            <select id="tc-test-language" onchange="tcAutoSaveTrigger()" title="Язык теста">
+                                <option value="RU">🇷🇺 Русский</option>
+                                <option value="KG">🇰🇬 Кыргызча</option>
                             </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="test-duration">Длительность (минуты)</label>
-                            <input type="number" id="test-duration" required value="45" min="1">
-                        </div>
-                        <div class="form-group">
-                            <label for="test-photo">Фото теста</label>
-                            <input type="file" id="test-photo" accept="image/*" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="answer-key">Ключ ответов (через запятую, например: A,B,C,D,E,A,B...)</label>
-                            <textarea id="answer-key" required placeholder="A,B,C,D,E,A,B,C,D,E" rows="3"></textarea>
-                        </div>
-
-                        <!-- ORT-Specific Fields -->
-                        <div class="form-group">
-                            <label for="test-type">Тип теста (ORT структура)</label>
-                            <select id="test-type">
-                                <option value="standard">Стандартный (без разделов)</option>
-                                <option value="math">Математика ОРТ (2 части + перерыв)</option>
-                                <option value="kyrgyz">Кыргызский язык (3 раздела + перерывы)</option>
+                            <input type="number" id="tc-test-duration" value="170" min="1" style="width:80px;"
+                                title="Длительность (мин)" oninput="tcAutoSaveTrigger()">
+                            <span style="font-size:12px;color:#999;">мин</span>
+                            <select id="tc-test-type" onchange="tcAutoSaveTrigger()" title="Тип теста">
+                                <option value="standard">Стандартный</option>
+                                <option value="math">Математика ОРТ</option>
+                                <option value="kyrgyz">Кыргызский язык</option>
+                                <option value="ort_full">ОРТ полный</option>
                             </select>
+                            <div class="tc-spacer"></div>
+                            <div class="tc-autosave-badge" id="tc-autosave-badge">💾 Автосохранение</div>
+                            <button class="tc-btn tc-btn-import" onclick="tcOpenImport()"
+                                title="Импорт из Excel/JSON">📥 Импорт</button>
+                            <button class="tc-btn tc-btn-ghost" onclick="tcOpenPreview()">👁️ Просмотр</button>
+                            <button class="tc-btn tc-btn-success" id="tc-save-btn" onclick="tcFinalSave()">💾 Сохранить
+                                тест</button>
                         </div>
 
-                        <div class="form-group">
-                            <label for="question-topics">Темы вопросов (JSON массив)</label>
-                            <textarea id="question-topics" placeholder='["Алгебра","Геометрия","Дроби",...]'
-                                rows="2"></textarea>
-                            <small style="color: #666; font-size: 12px;">Опционально: список тем для каждого
-                                вопроса</small>
+                        <!-- Import Panel (hidden by default) -->
+                        <div class="tc-import-panel" id="tc-import-panel">
+                            <div style="display:flex;justify-content:space-between;align-items:center;">
+                                <h3>📥 Импорт вопросов</h3>
+                                <button class="tc-btn tc-btn-ghost tc-btn-sm" onclick="tcOpenImport()">✕
+                                    Закрыть</button>
+                            </div>
+                            <div class="tc-import-tabs">
+                                <button class="tc-import-tab-btn active" data-imptab="excel"
+                                    onclick="tcSwitchImportTab('excel')">📊 Excel (.xlsx)</button>
+                                <button class="tc-import-tab-btn" data-imptab="json"
+                                    onclick="tcSwitchImportTab('json')">{ } JSON</button>
+                            </div>
+
+                            <div class="tc-import-tab active" id="tc-imp-excel">
+                                <p style="font-size:13px;color:#666;margin:0;">Загрузите .xlsx файл. Колонки:
+                                    <strong>text, A, B, C, D, answer, topic, weight, section, explanation</strong>
+                                </p>
+                                <div class="tc-import-drop" onclick="document.getElementById('tc-excel-input').click()">
+                                    📊 Нажмите чтобы выбрать Excel файл
+                                </div>
+                                <input type="file" id="tc-excel-input" accept=".xlsx,.xls,.csv" style="display:none"
+                                    onchange="tcHandleExcelImport(event)">
+                            </div>
+
+                            <div class="tc-import-tab" id="tc-imp-json">
+                                <p style="font-size:13px;color:#666;margin:0;">Загрузите .json файл со структурой:</p>
+                                <div class="tc-json-hint">[\n {\n "text": "Вопрос...",\n "A": "Вариант", "B":
+                                    "Вариант",\n "C": "Вариант", "D": "Вариант",\n "answer": "A",\n "topic":
+                                    "Алгебра",\n "weight": 1,\n "explanation": "Пояснение..."\n }\n]</div>
+                                <div class="tc-import-drop" onclick="document.getElementById('tc-json-input').click()">
+                                    { } Нажмите чтобы выбрать JSON файл
+                                </div>
+                                <input type="file" id="tc-json-input" accept=".json" style="display:none"
+                                    onchange="tcHandleJSONImport(event)">
+                            </div>
                         </div>
 
-                        <div class="form-group">
-                            <label for="question-weights">Веса вопросов (JSON массив)</label>
-                            <textarea id="question-weights" placeholder='[1,1,2,1,1,...]' rows="2"></textarea>
-                            <small style="color: #666; font-size: 12px;">Опционально: вес каждого вопроса (по умолчанию
-                                1)</small>
+                        <!-- Bulk Action Bar -->
+                        <div class="tc-bulk-bar" id="tc-bulk-bar">
+                            <strong>✓ <span id="tc-bulk-count">0</span> выбрано</strong>
+                            <select class="tc-bulk-select" id="tc-bulk-field">
+                                <option value="">— Поле —</option>
+                                <option value="topic">Тема</option>
+                                <option value="weight">Вес (баллы)</option>
+                                <option value="section">Раздел</option>
+                                <option value="correctAnswer">Правильный ответ</option>
+                            </select>
+                            <input type="text" class="tc-bulk-select" id="tc-bulk-value" placeholder="Новое значение..."
+                                style="flex:1;max-width:200px;">
+                            <button class="tc-btn tc-btn-primary tc-btn-sm" onclick="tcApplyBulk()">✓ Применить</button>
+                            <button class="tc-btn tc-btn-ghost tc-btn-sm" onclick="tcDeselectAll()">✕ Снять
+                                выбор</button>
+                            <button class="tc-btn tc-btn-ghost tc-btn-sm" onclick="tcSelectAll()">☑ Все</button>
                         </div>
 
-                        <button type="submit" class="btn btn-primary">Загрузить тест</button>
-                    </form>
-                </div>
+                        <!-- Body: Sidebar + Main -->
+                        <div class="tc-body">
 
-                <div class="admin-section">
-                    <h2>Загруженные тесты</h2>
-                    <div id="admin-tests-list">
-                        <p>Загрузка...</p>
+                            <!-- Sidebar -->
+                            <div class="tc-sidebar" id="tc-sidebar">
+                                <div class="tc-sidebar-header">
+                                    <span>Вопросы</span>
+                                    <span id="tc-q-count" style="font-size:12px;color:#999;">0 вопросов</span>
+                                    <button class="tc-btn tc-btn-primary tc-btn-sm" onclick="tcAddQuestion()"
+                                        title="Добавить вопрос">+ Добавить</button>
+                                </div>
+                                <div class="tc-sidebar-scroll" id="tc-sidebar-list">
+                                    <!-- Generated by JS -->
+                                </div>
+                            </div>
+
+                            <!-- Main Editor -->
+                            <div class="tc-main" id="tc-main">
+                                <div class="tc-empty-state">
+                                    <span class="tc-empty-icon">📝</span>
+                                    <h3>Конструктор тестов</h3>
+                                    <p>Выберите вопрос в списке слева или нажмите «+ Добавить»</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Bulk Media Drop Zone -->
+                        <div class="admin-section" style="border-top:1px solid #e2e8f0;padding:20px;">
+                            <h3 style="margin:0 0 12px;font-size:15px;">🖼️ Медиа-менеджер — загрузить фото для всех
+                                вопросов сразу</h3>
+                            <p style="font-size:13px;color:#666;margin:0 0 12px;">Назовите файлы <code>q1.png</code>,
+                                <code>q2.png</code> ... <code>q150.png</code> и перетащите их сюда — они автоматически
+                                привяжутся к нужным вопросам.
+                            </p>
+                            <div class="tc-drop-zone" id="tc-bulk-drop"
+                                ondragover="event.preventDefault(); this.classList.add('drag-over')"
+                                ondragleave="this.classList.remove('drag-over')"
+                                ondrop="event.preventDefault(); this.classList.remove('drag-over'); tcHandleBulkInput({target:{files:event.dataTransfer.files}})"
+                                onclick="document.getElementById('tc-bulk-input').click()">
+                                <span class="tc-drop-icon">📦</span>
+                                <p>Перетащите до 150 изображений сюда</p>
+                                <small>q1.png → Вопрос 1, q2.png → Вопрос 2, ...</small>
+                            </div>
+                            <input type="file" id="tc-bulk-input" accept="image/*" multiple class="tc-drop-input"
+                                onchange="tcHandleBulkInput(event)">
+                            <div class="tc-img-preview-grid" id="tc-media-grid"></div>
+                        </div>
+                    </div>
+
+                    <!-- Published Tests List -->
+                    <div class="admin-section" style="margin-top:12px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                            <h2 style="margin:0;">Опубликованные тесты</h2>
+                            <button class="btn btn-primary" onclick="loadAdminTests()"
+                                style="padding:7px 14px;font-size:13px;">🔄 Обновить</button>
+                        </div>
+                        <div id="admin-tests-list">
+                            <p>Загрузка...</p>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Video Management Section -->
-                <div class="admin-section" style="margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px;">
-                    <h2>Управление видео уроками</h2>
-                    <div class="admin-form-container">
-                        <form id="video-form" onsubmit="event.preventDefault(); saveVideo()">
-                            <div class="form-group">
-                                <label>Название видео</label>
-                                <input type="text" id="video-title" required
-                                    placeholder="Например: Разбор математики 2024">
-                            </div>
-                            <div class="form-group">
-                                <label>Ссылка на YouTube</label>
-                                <input type="text" id="video-url" required placeholder="https://youtu.be/...">
-                            </div>
-                            <div class="form-group">
-                                <label>Язык</label>
-                                <select id="video-language">
-                                    <option value="RU">Русский</option>
-                                    <option value="KG">Кыргызча</option>
-                                </select>
-                            </div>
-                            <button type="submit" class="btn btn-primary" style="background-color: #E31E24;">Добавить
-                                видео</button>
-                        </form>
+                <!-- 3. Video Section -->
+                <div id="section-videos" class="admin-tab">
+                    <div class="admin-section">
+                        <h2>Управление видео уроками</h2>
+                        <div class="admin-form-container">
+                            <form id="video-form" onsubmit="event.preventDefault(); saveVideo()">
+                                <div class="form-group">
+                                    <label>Название видео</label>
+                                    <input type="text" id="video-title" required
+                                        placeholder="Например: Разбор математики 2024">
+                                </div>
+                                <div class="form-group">
+                                    <label>Ссылка на YouTube</label>
+                                    <input type="text" id="video-url" required placeholder="https://youtu.be/...">
+                                </div>
+                                <div class="form-group">
+                                    <label>Язык</label>
+                                    <select id="video-language">
+                                        <option value="RU">Русский</option>
+                                        <option value="KG">Кыргызча</option>
+                                    </select>
+                                </div>
+                                <button type="submit" class="btn btn-primary"
+                                    style="background-color: #E31E24;">Добавить
+                                    видео</button>
+                            </form>
+                        </div>
+                        <div id="admin-videos-list" style="margin-top: 20px;">
+                            <p>Загрузка видео...</p>
+                        </div>
                     </div>
-                    <div id="admin-videos-list" style="margin-top: 20px;">
-                        <p>Загрузка видео...</p>
+                </div>
+
+                <!-- 4. CMS Section -->
+                <div id="section-cms" class="admin-tab">
+                    <div class="admin-section" style="margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px;">
+                        <h2>Управление текстами (CMS)</h2>
+                        <p style="color: #666; margin-bottom: 20px;">Редактирование секции "Знакомо?"</p>
+                        <div id="admin-cms-list"
+                            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+                            <p>Загрузка контента...</p>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+    </div>
 
-    <!-- Success Modal -->
-    <div id="success-modal" class="modal">
-        <div class="modal-content success-content">
-            <h2>✅ Готово!</h2>
-            <p>Твой результат передан эксперту Kerege. Ожидай сообщение в WhatsApp</p>
-            <button class="btn btn-primary" onclick="closeSuccessModal()">Вернуться на главную</button>
+    <!-- ═══ TEST CONSTRUCTOR: Preview Modal Overlay (body-level) ═══ -->
+    <div class="tc-preview-overlay" id="tc-preview-overlay" onclick="if(event.target===this)tcClosePreview()">
+        <div class="tc-preview-modal">
+            <div class="tc-preview-header">
+                <h3>👁️ Предпросмотр вопроса</h3>
+                <div class="tc-preview-tabs">
+                    <button class="tc-preview-tab-btn active" data-pvtab="desktop"
+                        onclick="tcSwitchPreviewTab('desktop')">🖥️ Desktop</button>
+                    <button class="tc-preview-tab-btn" data-pvtab="mobile" onclick="tcSwitchPreviewTab('mobile')">📱
+                        Mobile</button>
+                </div>
+                <button class="tc-preview-close" onclick="tcClosePreview()">✕</button>
+            </div>
+            <div class="tc-preview-body" id="tc-preview-body">
+                <!-- Populated by JS -->
+            </div>
         </div>
     </div>
 
@@ -504,7 +722,7 @@
                 </div>
             </div>
             <div class="footer-bottom">
-                <p>&copy; 2026 KEREGE. Все права защищены.</p>
+                <p>&copy; 2026 KEREGE. Бардык укуктар корголгон.</p>
             </div>
         </div>
     </footer>
@@ -520,6 +738,8 @@
     <script src="success_modal.js"></script>
     <script src="app.js"></script>
     <script src="admin.js"></script>
+    <script src="test-constructor.js"></script>
+    <script src="certificate-generator.js"></script>
 </body>
 
 </html>

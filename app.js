@@ -18,6 +18,7 @@ let isOnBreak = false;
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
     loadTests();
+    loadVideos();
     setupWhatsAppMask();
     checkRoute();
 });
@@ -41,6 +42,9 @@ function showAdminPage() {
 
 function showHome() {
     document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+    // Also remove dynamic linked-test-status screen if present
+    const statusScreen = document.getElementById('linked-test-status');
+    if (statusScreen) statusScreen.remove();
     document.getElementById('landing-page').classList.add('active');
     updateNavLinks('home');
     window.scrollTo(0, 0);
@@ -95,46 +99,221 @@ function scrollToTests() {
 }
 
 function checkRoute() {
-    // Hidden admin route - only accessible via #keregemanager
-    if (window.location.hash === '#keregemanager') {
+    const hash = window.location.hash;
+    const params = new URLSearchParams(window.location.search);
+    const accessCode = params.get('code');
+
+    // Access-link route: ?code=XXXX
+    if (accessCode) {
+        validateAccessCode(accessCode);
+        return;
+    }
+
+    // Hidden admin route
+    if (hash === '#keregemanager') {
         showAdminPage();
-    } else {
-        // Ensure we're on landing page if not admin route
-        if (!window.location.hash || window.location.hash === '#') {
-            showLanding();
+    }
+    // Direct test link: #test-{id}
+    else if (hash.startsWith('#test-')) {
+        const testId = hash.replace('#test-', '');
+        if (testId) {
+            loadLinkedTest(testId);
         }
+    }
+    // Default landing
+    else if (!hash || hash === '#') {
+        showLanding();
     }
 }
 
-// Load Tests
-async function loadTests() {
-    // 1. Try Loading from Supabase
-    if (supabaseApp) {
-        try {
-            const { data, error } = await supabaseApp
-                .from('tests')
-                .select('*')
-                .order('created_at', { ascending: false });
+// Validate a ?code= access link and load the test if valid
+async function validateAccessCode(code) {
+    showLinkedTestStatus('⏳', 'Жүктөлүүдө...', '', false);
 
-            if (!error && data && data.length > 0) {
-                // Map Supabase fields to App fields if needed
-                // Assuming DB has: name, language, duration, id
-                displayTests(data);
-                return;
-            }
-
-            if (error) {
-                console.warn('Supabase load error (using mocks):', error.message);
-            }
-        } catch (err) {
-            console.warn('Supabase connection error (using mocks):', err);
-        }
+    if (!supabaseApp) {
+        showLinkedTestStatus('❌', 'База данных недоступна', 'Попробуйте позже.', true);
+        return;
     }
 
-    // 2. Fallback to MOCK_TESTS (if DB empty or error)
-    // This ensures the app works immediately without backend setup
-    console.log('Using MOCK_TESTS');
-    displayTests(MOCK_TESTS);
+    try {
+        const { data, error } = await supabaseApp
+            .from('test_access_links')
+            .select('test_id, expires_at')
+            .eq('access_code', code)
+            .single();
+
+        if (error || !data) {
+            showLinkedTestStatus(
+                '🔒',
+                'Ссылка недействительна',
+                'Эта ссылка не существует или была удалена. Обратитесь к преподавателю.',
+                true
+            );
+            return;
+        }
+
+        // Check expiry
+        if (data.expires_at && new Date(data.expires_at) < new Date()) {
+            const expired = new Date(data.expires_at).toLocaleString('ru-RU');
+            showLinkedTestStatus(
+                '⏰',
+                'Срок ссылки истёк',
+                `Доступ по этой ссылке закрыт <strong>${expired}</strong>. Запросите новую ссылку у преподавателя.`,
+                true
+            );
+            return;
+        }
+
+        // Valid — clean up URL and load test
+        history.replaceState(null, '', location.pathname);
+        loadLinkedTest(data.test_id);
+
+    } catch (err) {
+        console.error('Access code validation error:', err);
+        showLinkedTestStatus('❌', 'Ошибка проверки', err.message, true);
+    }
+}
+
+
+// Load a specific test via direct link (link-only tests)
+async function loadLinkedTest(testId) {
+    if (!supabaseApp) {
+        alert('Ошибка: база данных не доступна');
+        return;
+    }
+
+    // Show loading screen
+    showLinkedTestStatus('⏳', 'Загрузка теста...', '', false);
+
+    try {
+        const { data, error } = await supabaseApp
+            .from('tests')
+            // Select only what is needed — avoids transferring photo_urls blobs
+            .select('id, name, language, duration, answer_key, test_type, topics, weights, is_link_only, access_start, access_end')
+            .eq('id', testId)
+            .single();
+
+        if (error || !data) {
+            showLinkedTestStatus('❌', 'Тест не найден', 'Проверьте правильность ссылки.', true);
+            return;
+        }
+
+        const now = new Date();
+
+        // Check access_start
+        if (data.access_start && now < new Date(data.access_start)) {
+            const startDate = new Date(data.access_start).toLocaleString('ru-RU');
+            showLinkedTestStatus('⏰', 'Тест ещё не начался', `Доступ откроется в: <strong>${startDate}</strong>`, true);
+            return;
+        }
+
+        // Check access_end
+        if (data.access_end && now > new Date(data.access_end)) {
+            const endDate = new Date(data.access_end).toLocaleString('ru-RU');
+            showLinkedTestStatus('🔒', 'Срок доступа истёк', `Доступ к тесту закрыт <strong>${endDate}</strong>. Обратитесь к преподавателю.`, true);
+            return;
+        }
+
+        // All good — load the test
+        currentTest = data;
+        // Remove the hash so going back works cleanly
+        history.replaceState(null, '', location.pathname);
+        openLeadForm();
+
+    } catch (err) {
+        console.error('Error loading linked test:', err);
+        showLinkedTestStatus('❌', 'Ошибка загрузки', err.message, true);
+    }
+}
+
+// Show a full-screen status page for linked test entry
+function showLinkedTestStatus(icon, title, message, showHomeBtn) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+
+    // Remove any existing status screen
+    const old = document.getElementById('linked-test-status');
+    if (old) old.remove();
+
+    const screen = document.createElement('div');
+    screen.id = 'linked-test-status';
+    screen.className = 'page active';
+    screen.style.cssText = 'display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(160deg,#e31e24,#9b1018);';
+    screen.innerHTML = `
+        <div style="text-align:center;color:white;padding:40px 24px;max-width:480px;">
+            <div style="font-size:72px;margin-bottom:16px;">${icon}</div>
+            <h1 style="font-size:32px;font-weight:800;margin-bottom:12px;">${title}</h1>
+            <p style="font-size:17px;opacity:.9;line-height:1.6;margin-bottom:32px;">${message}</p>
+            ${showHomeBtn ? `<button onclick="showHome()" style="background:white;color:#e31e24;border:none;padding:14px 32px;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;">На главную</button>` : ''}
+        </div>`;
+    document.body.appendChild(screen);
+}
+
+// Lead Form Functions — single canonical versions below (lines 287+)
+
+
+// Load Tests (public list — excludes link-only tests)
+// 🚀 Cached for 2 minutes to reduce Supabase load under high concurrency
+const TESTS_CACHE_KEY = 'kerege_tests_cache';
+const TESTS_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+let _testsLoading = false; // Prevent duplicate in-flight requests
+
+async function loadTests() {
+    // 1. Serve from cache if fresh
+    try {
+        const cached = JSON.parse(localStorage.getItem(TESTS_CACHE_KEY) || 'null');
+        if (cached && Date.now() - cached.ts < TESTS_CACHE_TTL) {
+            displayTests(cached.data);
+            return;
+        }
+    } catch (_) {}
+
+    // 2. Guard against duplicate simultaneous calls
+    if (_testsLoading) return;
+    _testsLoading = true;
+
+    if (!supabaseApp) {
+        _testsLoading = false;
+        displayTests([]);
+        return;
+    }
+    try {
+        // Select only necessary columns (reduces data transfer)
+        const { data, error } = await supabaseApp
+            .from('tests')
+            .select('id, name, language, duration')
+            .or('is_link_only.is.null,is_link_only.eq.false')
+            .order('created_at', { ascending: false })
+            .limit(50); // Safety cap
+
+        if (!error && data) {
+            // Save to cache
+            try { localStorage.setItem(TESTS_CACHE_KEY, JSON.stringify({ ts: Date.now(), data })); } catch (_) {}
+            displayTests(data);
+            _testsLoading = false;
+            return;
+        }
+
+        // Fallback: if column doesn't exist yet, load all tests
+        console.warn('is_link_only filter failed (migration not run?), loading all tests:', error?.message);
+        const { data: allData, error: allError } = await supabaseApp
+            .from('tests')
+            .select('id, name, language, duration')
+            .order('created_at', { ascending: false })
+            .limit(50);
+
+        displayTests(allError ? [] : (allData || []));
+
+    } catch (err) {
+        console.warn('Supabase connection error:', err);
+        displayTests([]);
+    } finally {
+        _testsLoading = false;
+    }
+}
+
+// Invalidate test list cache (call after admin uploads/deletes a test)
+function invalidateTestsCache() {
+    try { localStorage.removeItem(TESTS_CACHE_KEY); } catch (_) {}
 }
 
 function displayTests(tests) {
@@ -144,6 +323,10 @@ function displayTests(tests) {
         testsContainer.innerHTML = '<div class="test-card"><p>Тесты скоро появятся</p></div>';
         return;
     }
+
+    // Cache basic test info for instant form opening
+    window.testCache = {};
+    tests.forEach(t => { window.testCache[t.id] = t; });
 
     testsContainer.innerHTML = tests.map(test => `
         <div class="test-card" onclick="selectTest('${test.id}')">
@@ -165,36 +348,34 @@ function displayTestsError(message) {
 }
 
 
-// Test Selection
-async function selectTest(testId) {
-    // Mock mode
-    if (MOCK_MODE) {
-        currentTest = MOCK_TESTS.find(t => t.id === testId);
-        if (currentTest) {
-            openLeadForm();
-        }
+// Global promise for background full-test fetch
+let _testLoadPromise = null;
+
+// Test Selection — instant open + background load
+function selectTest(testId) {
+    if (!supabaseApp) {
+        alert('Ошибка: Supabase не подключен');
         return;
     }
 
-    try {
-        const response = await fetch(`${CONFIG.SCRIPT_URL}?action=getTest&id=${testId}`);
+    // Set basic info immediately from cache so form opens instantly
+    const cached = window.testCache && window.testCache[testId];
+    currentTest = cached ? { ...cached } : { id: testId };
 
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
+    // Start loading full test data (with photos) in the background
+    _testLoadPromise = supabaseApp
+        .from('tests')
+        .select('*')
+        .eq('id', testId)
+        .single()
+        .then(({ data, error }) => {
+            if (error) throw error;
+            currentTest = data; // Update with full data when ready
+            return data;
+        });
 
-        const data = await response.json();
-
-        if (data.success) {
-            currentTest = data.test;
-            openLeadForm();
-        } else {
-            alert('Ошибка загрузки теста: ' + (data.error || 'Неизвестная ошибка'));
-        }
-    } catch (error) {
-        console.error('Error selecting test:', error);
-        alert('Ошибка загрузки теста. Проверьте подключение к серверу.');
-    }
+    // Open lead form immediately — no waiting
+    openLeadForm();
 }
 
 // Lead Form
@@ -236,47 +417,52 @@ function setupWhatsAppMask() {
     });
 }
 
-function submitLeadForm(event) {
-    event.preventDefault();
 
-    const firstName = document.getElementById('firstName').value;
-    const lastName = document.getElementById('lastName').value;
-    const whatsapp = document.getElementById('whatsapp').value.replace(/\D/g, '');
-
-    if (whatsapp.length !== 12) {
-        alert('Пожалуйста, введите корректный номер WhatsApp');
+// Test Interface
+async function startTest() {
+    if (!studentData) {
+        alert('Ошибка: данные студента не найдены');
         return;
     }
 
-    studentData = {
-        firstName,
-        lastName,
-        whatsapp: '+' + whatsapp
-    };
+    // Wait for the background full-test fetch to complete if still loading
+    if (_testLoadPromise) {
+        const btn = document.querySelector('#lead-form button[type="submit"]');
+        const origText = btn ? btn.textContent : '';
+        if (btn) { btn.textContent = 'Загрузка теста...'; btn.disabled = true; }
 
-    closeLeadForm();
-    startTest();
-}
+        try {
+            const fullData = await _testLoadPromise;
+            currentTest = fullData;
+        } catch (err) {
+            console.error('Test data failed to load:', err);
+            alert('Ошибка загрузки теста. Попробуйте ещё раз.');
+            if (btn) { btn.textContent = origText; btn.disabled = false; }
+            return;
+        } finally {
+            if (btn) { btn.textContent = origText; btn.disabled = false; }
+            _testLoadPromise = null;
+        }
+    }
 
-// Test Interface
-function startTest() {
-    if (!currentTest || !studentData) {
-        alert('Ошибка: данные теста или студента не найдены');
+    if (!currentTest) {
+        alert('Ошибка: данные теста не найдены');
         return;
     }
 
     // Reset state
     answers = {};
-    answerHistory = {}; // Reset answer history
-    testStartTime = Date.now(); // Start timing
+    answerHistory = {};
+    testStartTime = Date.now();
+    currentPhotoIndex = 0;
 
-    // Set test image
-    document.getElementById('test-image').src = currentTest.photoUrl;
-    document.getElementById('zoomed-image').src = currentTest.photoUrl;
+    // Initialize Image
+    updateTestImage();
+
     document.getElementById('test-title').textContent = currentTest.name;
 
     // Generate answer grid
-    generateAnswerGrid(currentTest.answerKey.length);
+    generateAnswerGrid(currentTest.answer_key.length);
 
     // Start timer
     startTimer(currentTest.duration);
@@ -284,6 +470,53 @@ function startTest() {
     // Show test page
     showTestPage();
 }
+
+let currentPhotoIndex = 0;
+
+function updateTestImage() {
+    if (!currentTest || !currentTest.photo_urls || currentTest.photo_urls.length === 0) return;
+
+    const photos = currentTest.photo_urls;
+    let photoUrl = photos[currentPhotoIndex];
+
+    // Fix for base64
+    if (photoUrl && !photoUrl.startsWith('http') && !photoUrl.startsWith('data:')) {
+        photoUrl = `data:image/png;base64,${photoUrl}`;
+    }
+
+    // Update images
+    document.getElementById('test-image').src = photoUrl;
+    document.getElementById('zoomed-image').src = photoUrl;
+
+    // Update Controls
+    const controls = document.getElementById('image-controls');
+    const counter = document.getElementById('page-counter');
+
+    if (photos.length > 1) {
+        controls.style.display = 'flex';
+        counter.textContent = `Стр. ${currentPhotoIndex + 1} / ${photos.length}`;
+    } else {
+        controls.style.display = 'none';
+    }
+}
+
+function prevImage() {
+    if (currentPhotoIndex > 0) {
+        currentPhotoIndex--;
+        updateTestImage();
+    }
+}
+
+function nextImage() {
+    if (currentTest && currentTest.photo_urls && currentPhotoIndex < currentTest.photo_urls.length - 1) {
+        currentPhotoIndex++;
+        updateTestImage();
+    }
+}
+
+// Ensure these are global
+window.prevImage = prevImage;
+window.nextImage = nextImage;
 
 function generateAnswerGrid(questionCount) {
     const grid = document.getElementById('answer-grid');
@@ -515,8 +748,11 @@ function zoomImage() {
     document.getElementById('image-modal').classList.add('active');
 }
 
-function closeZoom() {
-    document.getElementById('image-modal').classList.remove('active');
+
+function closeZoom(event) {
+    if (!event || event.target.id === 'image-modal' || event.target.classList.contains('close-zoom')) {
+        document.getElementById('image-modal').classList.remove('active');
+    }
 }
 
 // Submit Test with ORT Analytics
@@ -534,25 +770,30 @@ async function submitTest() {
 
     // Prepare submission data for Supabase
     const submission = {
-        student_name: `${studentData.firstName} ${studentData.lastName}`,
-        parent_phone: studentData.whatsapp,
+        first_name: studentData.firstName,
+        last_name: studentData.lastName,
+        whatsapp: studentData.whatsapp,
+        region: studentData.region,
+        oblast: studentData.oblast, // Restored
+        parent_phone: studentData.parentPhone,
+        parent_name: studentData.parentName, // Restored
         test_name: currentTest.name,
-        test_id: currentTest.id,
+        ort_score: results.score,  // Changed from scaled_score to ort_score
         raw_score: results.correct,
-        scaled_score: results.score,
-        total_questions: currentTest.answerKey.length,
-        topic_analysis: topicAnalysis,
-        answers_json: JSON.stringify(answers),
-        answer_history: JSON.stringify(answerHistory),
+        correct_count: results.correct,  // Added for compatibility
+        total_questions: currentTest.answer_key.length,
         duration_seconds: getTestDuration(),
-        created_at: new Date().toISOString()
+        topic_analysis: topicAnalysis,
+        test_language: 'RU',  // Added required field
+        test_type: 'standard'  // Added required field
+        // created_at will be set automatically by database
     };
 
     try {
         // Save to Supabase
         if (supabaseApp) {
             const { data, error } = await supabaseApp
-                .from('test_results')
+                .from('test_results') // Changed back to table, not view
                 .insert([submission]);
 
             if (error) {
@@ -563,13 +804,58 @@ async function submitTest() {
             console.log('Test result saved:', data);
         }
 
-        // Show success with ORT score
-        showSuccessModalWithScore(results.score, results.correct, currentTest.answerKey.length, topicAnalysis);
+        // Show lead generation message instead of results
+        showLeadGenerationMessage();
 
     } catch (error) {
         console.error('Error submitting test:', error);
         alert('Ошибка отправки результатов: ' + error.message);
     }
+}
+
+// Show Lead Generation Message
+function showLeadGenerationMessage() {
+    const modal = document.getElementById('success-modal');
+    if (!modal) return;
+
+    const modalContent = modal.querySelector('.success-modal-content, .modal-content, .success-content');
+    if (modalContent) {
+        modalContent.innerHTML = `
+        <span class="close" onclick="closeSuccessModal()">×</span>
+        <div class="success-icon">🎉</div>
+        <h2 class="modal-title" style="margin-bottom: 16px;">Спасибо за прохождение теста!</h2>
+        
+        <div style="background: #f9fafb; border-radius: 12px; padding: 24px; margin: 24px 0; border: 1px solid #e5e7eb;">
+            <div style="font-size: 48px; text-align: center; margin-bottom: 16px;">✅</div>
+            <p style="font-size: 16px; color: var(--gray-700); text-align: center; line-height: 1.6; margin: 0;">
+                Ваши результаты <strong>успешно отправлены</strong> в нашу систему.
+            </p>
+        </div>
+
+        <p style="font-size: 15px; color: var(--gray-700); text-align: center; margin-bottom: 24px;">
+            Чтобы узнать свой балл и получить подробный разбор теста, свяжитесь с нашим менеджером.
+        </p>
+
+        <div class="contact-buttons" style="display: flex; gap: 12px; margin-bottom: 16px;">
+            <a href="https://wa.me/996555123456?text=%D0%97%D0%B4%D1%80%D0%B0%D0%B2%D1%81%D1%82%D0%B2%D1%83%D0%B9%D1%82%D0%B5!%20%D0%AF%20%D0%BF%D1%80%D0%BE%D1%88%D0%B5%D0%BB(%D0%B0)%20%D1%82%D0%B5%D1%81%D1%82%20%D0%BD%D0%B0%20%D0%B2%D0%B0%D1%88%D0%B5%D0%BC%20%D1%81%D0%B0%D0%B9%D1%82%D0%B5%20%D0%B8%20%D1%85%D0%BE%D1%87%D1%83%20%D1%83%D0%B7%D0%BD%D0%B0%D1%82%D1%8C%20%D1%80%D0%B5%D0%B7%D1%83%D0%BB%D1%8C%D1%82%D0%B0%D1%82%D1%8B." target="_blank" class="btn btn-whatsapp" style="flex: 1; text-align: center;">💬 WhatsApp</a>
+            <a href="tel:+996555123456" class="btn btn-call" style="flex: 1; text-align: center; background: #e31e24; color: white;">📞 Позвонить</a>
+        </div>
+        
+        <button class="btn btn-secondary" onclick="closeSuccessModal()" style="width: 100%;">Вернуться на главную</button>
+        `;
+    }
+
+    modal.style.display = 'flex';
+    modal.classList.add('active'); // Added to ensure CSS rules apply
+}
+
+function closeSuccessModal() {
+    const modal = document.getElementById('success-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    // Navigate to landing page
+    showLanding();
 }
 
 // Calculate topic analysis
@@ -579,7 +865,7 @@ function calculateTopicAnalysis() {
     }
 
     const topicStats = {};
-    const answerKey = currentTest.answerKey;
+    const answerKey = currentTest.answer_key;
 
     // Analyze each question
     for (let i = 1; i <= answerKey.length; i++) {
@@ -607,7 +893,7 @@ function calculateTopicAnalysis() {
 
 // Auto-Grading System
 function calculateScore() {
-    const answerKey = currentTest.answerKey;
+    const answerKey = currentTest.answer_key;
     let correct = 0;
     const total = answerKey.length;
 
@@ -671,6 +957,71 @@ function formatAnswerHistory() {
     return formatted.join(', ');
 }
 
+// Load Videos for Landing Page
+async function loadVideos() {
+    // Try Loading from Supabase
+    if (supabaseApp) {
+        try {
+            const { data, error } = await supabaseApp
+                .from('marketing_videos')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (!error && data && data.length > 0) {
+                displayVideos(data);
+                return;
+            }
+        } catch (err) {
+            console.warn('Supabase video load error:', err);
+        }
+    }
+
+    // Fallback / Empty
+    const container = document.getElementById('videos-list');
+    if (container) {
+        container.innerHTML = '<div class="video-card"><p>Видео уроки скоро появятся</p></div>';
+    }
+}
+
+function displayVideos(videos) {
+    const container = document.getElementById('videos-list');
+    if (!container) return;
+
+    container.innerHTML = videos.map(video => {
+        // Simple YouTube ID extraction
+        let videoId = '';
+        try {
+            if (video.youtube_url.includes('v=')) {
+                videoId = video.youtube_url.split('v=')[1].split('&')[0];
+            } else if (video.youtube_url.includes('youtu.be/')) {
+                videoId = video.youtube_url.split('youtu.be/')[1].split('?')[0];
+            } else if (video.youtube_url.includes('embed/')) {
+                videoId = video.youtube_url.split('embed/')[1].split('?')[0];
+            }
+        } catch (e) { videoId = ''; }
+
+        if (!videoId) {
+            return `<div class="video-card"><p>Ошибка ссылки: ${video.title}</p></div>`;
+        }
+
+        const embedUrl = `https://www.youtube.com/embed/${videoId}`;
+
+        return `
+        <div class="video-card">
+            <div class="video-wrapper" style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 8px; margin-bottom: 12px;">
+                <iframe src="${embedUrl}" title="${video.title}" 
+                    style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0;" 
+                    allowfullscreen>
+                </iframe>
+            </div>
+            <h3>${video.title}</h3>
+            <p style="color: #666; font-size: 14px;">${video.language === 'RU' ? 'Русский' : 'Кыргызча'}</p>
+        </div>
+        `;
+    }).join('');
+}
+
+
 // Mock Data (for demo purposes)
 const MOCK_TESTS = [
     {
@@ -722,120 +1073,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize Supabase Client
     // The previous supabaseApp and window.supabaseClient declarations are removed as they are now part of the new global block.
 
-    // Submit Test Results
-    async function submitTestResults() {
-        clearTimer();
 
-        // Check credentials
-        if (!supabaseApp || SUPABASE_URL.includes('YOUR_PROJECT_ID')) {
-            alert('Ошибка: Supabase не настроен в app.js');
-            // Show results anyway for demo
-            showResultsModal(calculateScore(), getTestDuration());
-            return;
-        }
-
-        // Calculate results
-        const results = calculateScore();
-        const duration = getTestDuration();
-        const fullHistory = formatAnswerHistory();
-
-        // Prepare data for submission
-        const resultData = {
-            first_name: studentData.firstName,
-            last_name: studentData.lastName,
-            whatsapp: studentData.whatsapp,
-            region: studentData.region || '',
-            parent_phone: studentData.parentPhone || '',
-            test_name: currentTest.name,
-            score: results.score,
-            correct_count: `${results.correct} / ${results.total}`,
-            duration: duration,
-            full_history: fullHistory,
-            answers: answers // send as JSONB
-        };
-
-        try {
-            const { data, error } = await supabaseApp
-                .from('test_results')
-                .insert([resultData])
-                .select();
-
-            if (error) throw error;
-
-            showResultsModal(results, duration);
-
-        } catch (error) {
-            console.error('Error submitting results:', error);
-            alert('Ошибка отправки результатов: ' + error.message);
-            // Show results anyway
-            showResultsModal(results, duration);
-        }
-    }
-
-    // Enhanced Results Modal
-    function showResultsModal(results, duration) {
-        const modal = document.getElementById('success-modal');
-        const content = modal.querySelector('.success-content');
-
-        const percentage = Math.round((results.correct / results.total) * 100);
-        const durationFormatted = formatDuration(duration);
-
-        content.innerHTML = `
-        <h2>🎉 Тест завершен!</h2>
-        <div style="margin: 32px 0;">
-            <div style="background: linear-gradient(135deg, #E31E24 0%, #C01A1F 100%); color: white; padding: 24px; border-radius: 12px; margin-bottom: 20px;">
-                <div style="font-size: 16px; opacity: 0.9; margin-bottom: 8px;">Твой ориентировочный балл ОРТ:</div>
-                <div style="font-size: 56px; font-weight: 800; line-height: 1;">${results.score}</div>
-                <div style="font-size: 14px; opacity: 0.8; margin-top: 8px;">из 245 возможных</div>
-            </div>
-            
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 20px;">
-                <div style="background: #F5F5F5; padding: 20px; border-radius: 10px; text-align: center;">
-                    <div style="font-size: 14px; color: #404040; margin-bottom: 8px;">Правильных ответов</div>
-                    <div style="font-size: 32px; font-weight: 700; color: #E31E24;">${results.correct}/${results.total}</div>
-                </div>
-                <div style="background: #F5F5F5; padding: 20px; border-radius: 10px; text-align: center;">
-                    <div style="font-size: 14px; color: #404040; margin-bottom: 8px;">Процент</div>
-                    <div style="font-size: 32px; font-weight: 700; color: #E31E24;">${percentage}%</div>
-                </div>
-            </div>
-            
-            <div style="background: #F5F5F5; padding: 16px; border-radius: 10px; text-align: center;">
-                <div style="font-size: 14px; color: #404040;">Время выполнения: <strong>${durationFormatted}</strong></div>
-            </div>
-        </div>
-        
-        <p style="font-size: 16px; color: #404040; margin-bottom: 24px;">
-            Результаты отправлены в WhatsApp. Продолжай готовиться к ОРТ с Kerege Synak!
-        </p>
-        
-        <button class="btn btn-primary" onclick="closeSuccessModal()">Вернуться на главную</button>
-    `;
-
-        modal.classList.add('active');
-    }
-
-    // Success Modal
-    function showSuccessModal() {
-        document.getElementById('success-modal').classList.add('active');
-    }
-
-    function closeSuccessModal() {
-        document.getElementById('success-modal').classList.remove('active');
-        showLanding();
-
-        // Reset state
-        currentTest = null;
-        studentData = null;
-        answers = {};
-        answerHistory = {};
-
-        // Reset form
-        document.getElementById('lead-form').reset();
-    }
-
-    // Handle browser back button and route changes
-    window.addEventListener('hashchange', checkRoute);
 
     // ==========================================
     // CRM & ADMIN FUNCTIONS
@@ -843,27 +1081,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Load Student Results from Supabase
     async function loadStudentResults() {
-        if (!supabaseApp) return;
-
         const tbody = document.getElementById('results-body');
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 20px;">Загрузка данных...</td></tr>';
+        if (!tbody) return;
+
+        if (!supabaseApp) {
+            console.error('Supabase client not initialized');
+            tbody.innerHTML = '<tr><td colspan="8" style="color: red; text-align: center; padding: 20px;">Ошибка: Supabase клиент не инициализирован. Проверьте подключение к интернету.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px;">Загрузка данных...</td></tr>';
 
         try {
+            console.log('Fetching CRM data from crm_student_results...');
             const { data, error } = await supabaseApp
-                .from('test_results')
+                .from('crm_student_results')
                 .select('*')
                 .order('created_at', { ascending: false });
 
-            if (error) throw error;
+            if (error) {
+                console.error('Supabase fetch error:', error);
+                throw error;
+            }
 
+            console.log('CRM Data fetched:', data);
             window.allResults = data; // Store for filtering
             renderResults(data);
 
         } catch (error) {
             console.error('Error loading results:', error);
-            tbody.innerHTML = `<tr><td colspan="6" style="color: red; text-align: center; padding: 20px;">Ошибка загрузки: ${error.message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" style="color: red; text-align: center; padding: 20px;">Ошибка загрузки: ${error.message}</td></tr>`;
         }
     }
+
+    // Make loadStudentResults globally accessible
+    window.loadStudentResults = loadStudentResults;
 
     // Render Results Table
     function renderResults(data) {
@@ -871,20 +1123,58 @@ document.addEventListener('DOMContentLoaded', () => {
         tbody.innerHTML = '';
 
         if (data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 20px;">Нет результатов</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px;">Нет результатов</td></tr>';
             return;
         }
 
         data.forEach(row => {
             const date = new Date(row.created_at).toLocaleDateString('ru-RU');
-            const studentName = `${row.first_name || ''} ${row.last_name || ''}`;
+            const studentName = `${row.first_name || ''} ${row.last_name || ''}`.trim();
             const studentPhone = row.whatsapp || '-';
-            const region = row.region || '-';
+            const parentName = row.parent_name || '-';
             const parentPhone = row.parent_phone || '-';
+            const region = row.region || '-';
+            const oblast = row.oblast || '-';
+            const testName = row.test_name || '-';
+            const ortScore = row.scaled_score || row.ort_score || '-';
+
+            // Правильные ответы в формате correct/total
+            const totalQuestions = row.total_questions || 0;
+            const correctAnswers = row.raw_score || 0;
+            const scoreDisplay = `${correctAnswers}/${totalQuestions}`;
 
             // Format Phones
             const cleanStudent = studentPhone.replace(/\D/g, '');
             const cleanParent = parentPhone.replace(/\D/g, '');
+
+            // Build topic analysis "weak topics" cell
+            let weakTopicsHtml = '<span style="color:#999;font-size:12px;">—</span>';
+            if (row.topic_analysis && Array.isArray(row.topic_analysis) && row.topic_analysis.length > 0) {
+                const weak = row.topic_analysis.filter(t => t.percentage < 60);
+                const topicId = `topic-${row.id}`;
+                if (weak.length > 0) {
+                    const tags = weak.map(t =>
+                        `<span style="display:inline-block;background:#fff0f0;color:#e31e24;border:1px solid #fcc;border-radius:4px;padding:2px 6px;font-size:11px;margin:2px;">${t.topic}: ${t.percentage}%</span>`
+                    ).join('');
+                    weakTopicsHtml = `
+                    <div>${tags}</div>
+                    <button onclick="document.getElementById('${topicId}').style.display=document.getElementById('${topicId}').style.display==='none'?'block':'none'" 
+                        style="font-size:11px;background:none;border:1px solid #ddd;border-radius:4px;padding:2px 8px;cursor:pointer;margin-top:4px;">Подробнее ▾</button>
+                    <div id="${topicId}" style="display:none;margin-top:6px;">
+                        ${row.topic_analysis.map(t => {
+                        const c = t.percentage >= 70 ? '#10b981' : t.percentage >= 50 ? '#f59e0b' : '#e31e24';
+                        return `<div style="font-size:11px;margin-bottom:4px;">
+                                <span>${t.topic}: <b style="color:${c};">${t.percentage}%</b> (${t.correct}/${t.total})</span>
+                                <div style="background:#eee;border-radius:3px;height:5px;margin-top:2px;">
+                                    <div style="background:${c};width:${t.percentage}%;height:5px;border-radius:3px;"></div>
+                                </div>
+                            </div>`;
+                    }).join('')}
+                    </div>`;
+                } else {
+                    weakTopicsHtml = '<span style="color:#10b981;font-size:12px;">✅ Все темы освоены</span>';
+                }
+            }
 
             const tr = document.createElement('tr');
             tr.style.borderBottom = '1px solid #eee';
@@ -893,19 +1183,23 @@ document.addEventListener('DOMContentLoaded', () => {
             <td style="padding: 12px;">${date}</td>
             <td style="padding: 12px;">
                 <strong>${studentName}</strong><br>
-                <a href="tel:+${cleanStudent}" style="color: #666; text-decoration: none;">📞 ${studentPhone}</a>
+                <a href="tel:+${cleanStudent}" style="color: #666; text-decoration: none; font-size: 13px;">📞 ${studentPhone}</a>
             </td>
             <td style="padding: 12px;">
-                <span style="color: #444;">Родитель</span><br>
-                <a href="tel:+${cleanParent}" style="color: #666; text-decoration: none; margin-right: 8px;">📞 Позвонить</a>
-                ${cleanParent ? `<a href="https://wa.me/${cleanParent}" target="_blank" style="color: #25D366; text-decoration: none;">💬 WhatsApp</a>` : ''}
+                <strong>${parentName}</strong><br>
+                <a href="tel:+${cleanParent}" style="color: #666; text-decoration: none; margin-right: 8px; font-size: 13px;">📞 ${parentPhone}</a>
+                ${cleanParent && cleanParent.length > 5 ? `<a href="https://wa.me/${cleanParent}" target="_blank" style="color: #25D366; text-decoration: none; font-size: 13px;">💬 WhatsApp</a>` : ''}
             </td>
-            <td style="padding: 12px;">${region}</td>
-            <td style="padding: 12px;">${row.test_name || '-'}</td>
             <td style="padding: 12px;">
-                <span style="font-weight: bold; color: #E31E24;">${row.scaled_score || row.score || '-'}</span>
-                <br><small>Пр: ${row.correct_count}</small>
+                <strong>${region}</strong><br>
+                <small style="color: #666;">${oblast}</small>
             </td>
+            <td style="padding: 12px;">${testName}</td>
+            <td style="padding: 12px;">
+                <span style="font-weight: bold; color: #E31E24; font-size: 16px;">${ortScore}</span><br>
+                <small style="color: #666;">${scoreDisplay}</small>
+            </td>
+            <td style="padding: 12px; min-width: 180px;">${weakTopicsHtml}</td>
             <td style="padding: 12px;">
                 <button onclick="deleteStudent('${row.id}')" class="btn-delete" style="background: #e31e24; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 14px; transition: background 0.3s;" onmouseover="this.style.background='#c01a1f'" onmouseout="this.style.background='#e31e24'" title="Удалить студента">
                     🗑️ Удалить
@@ -913,7 +1207,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </td>
             <td style="padding: 12px;">
                 <button class="btn-sm" onclick='generateCertificate(${JSON.stringify(row)})' style="padding: 6px 12px; background: #E31E24; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
-                    PDF
+                    📄 PDF
                 </button>
             </td>
         `;
@@ -921,170 +1215,78 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Filter Results
+    // Filter Results — guard against allResults not loaded yet
     function filterResults() {
+        if (!window.allResults) return;
         const query = document.getElementById('crm-search').value.toLowerCase();
         const filtered = window.allResults.filter(row => {
-            const name = `${row.first_name} ${row.last_name}`.toLowerCase();
+            const name = `${row.first_name || ''} ${row.last_name || ''}`.toLowerCase();
             const phone = (row.whatsapp || '').toLowerCase();
             return name.includes(query) || phone.includes(query);
         });
         renderResults(filtered);
     }
 
-    // Generate PDF Certificate
-    async function generateCertificate(student) {
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF({
-            orientation: 'landscape',
-            unit: 'mm',
-            format: 'a4'
-        });
+    // Make filterResults globally accessible
+    window.filterResults = filterResults;
 
-        // Background (Simple Border)
-        doc.setLineWidth(2);
-        doc.setDrawColor(227, 30, 36); // Kerege Red
-        doc.rect(10, 10, 277, 190);
 
-        doc.setLineWidth(0.5);
-        doc.setDrawColor(0, 0, 0);
-        doc.rect(15, 15, 267, 180);
+    // ==========================================
+    // CRM & ADMIN FUNCTIONS — END
+    // ==========================================
 
-        // Header
-        doc.setTextColor(227, 30, 36);
-        doc.setFontSize(40);
-        doc.setFont("helvetica", "bold");
-        doc.text("KEREGE SYNAK", 148.5, 40, { align: "center" });
+}); // end outer DOMContentLoaded
 
-        // Certificate Title
-        doc.setTextColor(0, 0, 0);
-        doc.setFontSize(60);
-        doc.setFont("times", "normal"); // Use standard font to avoid cyrillic issues if not installed
+// showAdminPanel MUST be global — called from admin.js login handler
+window.showAdminPanel = function () {
+    document.getElementById('admin-login').style.display = 'none';
+    document.getElementById('admin-content').style.display = 'block';
+    if (typeof window.loadStudentResults === 'function') window.loadStudentResults();
+    if (typeof loadAdminVideos === 'function') loadAdminVideos();
+    if (typeof loadAdminContentBlocks === 'function') loadAdminContentBlocks();
+};
 
-        // NOTE: jsPDF default fonts lack Cyrillic support.
-        // For production, we'd need to load a custom font via .addFileToVFS for Russian names.
-        // For this prototype, I will transliterate or warn.
 
-        doc.setFontSize(30);
-        doc.text("CERTIFICATE", 148.5, 70, { align: "center" });
+// =====================================================
+// GLOBAL LEAD FORM FUNCTIONS
+// Must be at global scope so HTML onsubmit can call them
+// =====================================================
+window.submitLeadForm = function (event) {
+    event.preventDefault();
 
-        doc.setFontSize(16);
-        doc.text("OF COMPLETION", 148.5, 80, { align: "center" });
+    const firstName = (document.getElementById('firstName')?.value || '').trim();
+    const lastName = (document.getElementById('lastName')?.value || '').trim();
+    const whatsapp = (document.getElementById('whatsapp')?.value || '').trim();
+    const region = (document.getElementById('region')?.value || '');
+    const oblast = (document.getElementById('oblast')?.value || '').trim();
+    const parentPhone = (document.getElementById('parentPhone')?.value || '').trim();
+    const parentName = (document.getElementById('parentName')?.value || '').trim();
 
-        // Student Name
-        doc.setFontSize(40);
-        doc.setTextColor(50, 50, 50);
-        // Transliterate name for safety in standard fonts
-        const transliteratedName = transliterate(student.first_name + " " + student.last_name);
-        doc.text(transliteratedName, 148.5, 110, { align: "center" });
-
-        // Details
-        doc.setFontSize(18);
-        doc.setTextColor(80, 80, 80);
-        doc.text(`Successfully passed the practice test:`, 148.5, 130, { align: "center" });
-        doc.setFontSize(22);
-        doc.setTextColor(0, 0, 0);
-        doc.text(transliterate(student.test_name), 148.5, 140, { align: "center" });
-
-        // Score
-        doc.setFontSize(20);
-        doc.setTextColor(227, 30, 36);
-        doc.text(`ORT SCORE: ${student.score} / 245`, 148.5, 160, { align: "center" });
-
-        // Footer
-        doc.setFontSize(12);
-        doc.setTextColor(100, 100, 100);
-        const date = new Date(student.created_at).toLocaleDateString();
-        doc.text(`Date: ${date}`, 30, 180);
-        doc.text("Director: Kerege Synak Team", 220, 180);
-
-        // Save
-        doc.save(`Certificate_${transliteratedName}.pdf`);
+    if (!firstName || !lastName || !whatsapp || !region) {
+        alert('\u041f\u043e\u0436\u0430\u043b\u0443\u0439\u0441\u0442\u0430, \u0437\u0430\u043f\u043e\u043b\u043d\u0438\u0442\u0435 \u0432\u0441\u0435 \u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u044b\u0435 \u043f\u043e\u043b\u044f');
+        return;
     }
 
-    // Simple Transliteration Helper (because jsPDF standard fonts don't support Cyrillic)
-    function transliterate(word) {
-        if (!word) return "";
-        const a = { "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "yo", "ж": "zh", "з": "z", "и": "i", "й": "y", "к": "k", "л": "l", "м": "m", "н": "n", "о": "o", "п": "p", "р": "r", "с": "s", "т": "t", "у": "u", "ф": "f", "х": "h", "ц": "ts", "ч": "ch", "ш": "sh", "щ": "sch", "ъ": "", "ы": "y", "ь": "", "э": "e", "ю": "yu", "я": "ya", "А": "A", "Б": "B", "В": "V", "Г": "G", "Д": "D", "Е": "E", "Ё": "Yo", "Ж": "Zh", "З": "Z", "И": "I", "Й": "Y", "К": "K", "Л": "L", "М": "M", "Н": "N", "О": "O", "П": "P", "Р": "R", "С": "S", "Т": "T", "У": "U", "Ф": "F", "Х": "H", "Ц": "Ts", "Ч": "Ch", "Ш": "Sh", "Щ": "Sch", "Ъ": "", "Ы": "", "Ь": "", "Э": "E", "Ю": "Yu", "Я": "Ya" };
-        return word.split('').map(char => a[char] || char).join("");
+    studentData = { firstName, lastName, whatsapp, region, oblast, parentPhone, parentName };
+
+    // Close modal
+    const modal = document.getElementById('lead-modal');
+    if (modal) {
+        modal.classList.remove('active');
+        modal.style.display = 'none';
     }
 
-    // Update Admin Login to load results
-    function showAdminPanel() {
-        document.getElementById('admin-login').style.display = 'none';
-        document.getElementById('admin-content').style.display = 'block';
-        loadStudentResults(); // Load CRM data
-        if (typeof loadAdminVideos === 'function') loadAdminVideos(); // Load Videos
+    // Start test (async — awaits background photo fetch if still loading)
+    startTest();
+};
+
+window.closeLeadForm = function () {
+    const modal = document.getElementById('lead-modal');
+    if (modal) {
+        modal.classList.remove('active');
+        modal.style.display = '';
     }
+    currentTest = null;
+    _testLoadPromise = null;
+};
 
-
-    // Load Videos for Landing Page
-    async function loadVideos() {
-        // 1. Try Loading from Supabase
-        if (supabaseApp) {
-            try {
-                const { data, error } = await supabaseApp
-                    .from('marketing_videos')
-                    .select('*')
-                    .order('created_at', { ascending: false });
-
-                if (!error && data && data.length > 0) {
-                    displayVideos(data);
-                    return;
-                }
-            } catch (err) {
-                console.warn('Supabase video load error:', err);
-            }
-        }
-
-        // 2. Fallback / Empty
-        const container = document.getElementById('videos-list');
-        if (container) {
-            container.innerHTML = '<div class="video-card"><p>Видео уроки скоро появятся</p></div>';
-        }
-    }
-
-    function displayVideos(videos) {
-        const container = document.getElementById('videos-list');
-        if (!container) return;
-
-        container.innerHTML = videos.map(video => {
-            // Simple YouTube ID extraction
-            let videoId = '';
-            try {
-                if (video.youtube_url.includes('v=')) {
-                    videoId = video.youtube_url.split('v=')[1].split('&')[0];
-                } else if (video.youtube_url.includes('youtu.be/')) {
-                    videoId = video.youtube_url.split('youtu.be/')[1].split('?')[0];
-                } else if (video.youtube_url.includes('embed/')) {
-                    videoId = video.youtube_url.split('embed/')[1].split('?')[0];
-                }
-            } catch (e) { videoId = ''; }
-
-            if (!videoId) {
-                return `<div class="video-card"><p>Ошибка ссылки: ${video.title}</p></div>`;
-            }
-
-            const embedUrl = `https://www.youtube.com/embed/${videoId}`;
-
-            return `
-        <div class="video-card">
-            <div class="video-wrapper" style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 8px; margin-bottom: 12px;">
-                <iframe src="${embedUrl}" title="${video.title}" 
-                    style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0;" 
-                    allowfullscreen>
-                </iframe>
-            </div>
-            <h3>${video.title}</h3>
-            <p style="color: #666; font-size: 14px;">${video.language === 'RU' ? 'Русский' : 'Кыргызча'}</p>
-        </div>
-        `;
-        }).join('');
-    }
-
-    // Ensure loadVideos is called
-    document.addEventListener('DOMContentLoaded', () => {
-        // loadTests(); - already called in line 43
-        loadVideos();
-    });
-});
