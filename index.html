@@ -49,6 +49,7 @@
                 <p class="hero-subtitle">Бул тест сенин чыныгы деңгээлиңди аныктайт. Тесттен кийин эксперттер кайсы
                     темалардан кыйналып жатканыңды аныктап консультация беришет. Тестти кантип тапшыруу тууралуу
                     колдонмо Бул сенин 200+ баллга жеткирүүчү жардамчың.</p>
+                <div id="hero-video-container" class="cms-video-container" style="margin: 24px 0; display: none; aspect-ratio: 16/9; max-width: 800px; margin-left: auto; margin-right: auto;"></div>
                 <button class="btn btn-primary" onclick="scrollToTests()">Тестти тандаңыз</button>
             </div>
         </section>
@@ -162,6 +163,7 @@
                         сунуштарды беребиз.
                     </p>
                 </div>
+                <div id="about-video-container" class="cms-video-container" style="margin: 32px 0; display: none; aspect-ratio: 16/9;"></div>
 
                 <!-- Stats -->
                 <div class="stats-grid">
@@ -331,38 +333,100 @@
 
     <!-- Test Interface -->
     <div id="test-page" class="page">
+        <!-- Test Header (sticky) -->
         <div class="test-header">
             <div class="container">
                 <div class="test-info">
                     <h2 id="test-title">Тест</h2>
-                    <div class="timer" id="timer">45:00</div>
+                    <div style="display:flex;align-items:center;gap:16px;">
+                        <span id="section-label" style="font-size:13px;color:#666;font-weight:600;"></span>
+                        <div class="timer" id="timer">45:00</div>
+                    </div>
                 </div>
             </div>
         </div>
-        <div class="test-container">
-            <div class="test-image-section" onclick="zoomImage()" style="cursor: pointer;">
-                <img id="test-image" src="" alt="Тест">
-                <button class="zoom-btn">🔍</button>
-                <div id="image-modal" class="image-modal" onclick="closeZoom(event)">
-                    <span class="close-zoom">&times;</span>
-                    <img id="zoomed-image" src="" alt="Увеличенное изображение">
+
+        <!-- ── IMAGE-BASED TEST (default layout) ── -->
+        <div id="image-test-layout">
+            <div class="test-container">
+                <div class="test-image-section" onclick="zoomImage()" style="cursor: pointer;">
+                    <img id="test-image" src="" alt="Тест">
+                    <button class="zoom-btn">🔍</button>
+                    <div id="image-modal" class="image-modal" onclick="closeZoom(event)">
+                        <span class="close-zoom">&times;</span>
+                        <img id="zoomed-image" src="" alt="Увеличенное изображение">
+                    </div>
+                </div>
+
+                <!-- Image Navigation Controls -->
+                <div id="image-controls" class="image-controls" style="display: none;">
+                    <button class="nav-btn prev-btn" onclick="prevImage()">❮ Артка</button>
+                    <span id="page-counter">Бет. 1 / 1</span>
+                    <button class="nav-btn next-btn" onclick="nextImage()">Алдыга ❯</button>
+                </div>
+
+                <div class="answer-section">
+                    <h3>Жоопторуңузду белгилеңиз</h3>
+                    <div id="answer-grid" class="answer-grid"></div>
+                    <button class="btn btn-primary" id="finish-btn" onclick="submitTest()" style="width:100%;margin-top:16px;">🏁 Финиш</button>
                 </div>
             </div>
+        </div>
 
-            <!-- Image Navigation Controls -->
-            <div id="image-controls" class="image-controls" style="display: none;">
-                <button class="nav-btn prev-btn" onclick="prevImage()">❮ Артка</button>
-                <span id="page-counter">Бет. 1 / 1</span>
-                <button class="nav-btn next-btn" onclick="nextImage()">Алдыга ❯</button>
-            </div>
-
-            <div class="answer-section">
-                <h3>Жоопторуңузду белгилеңиз</h3>
-                <div id="answer-grid" class="answer-grid">
-                    <!-- Generated dynamically -->
+        <!-- ── PDF-BASED TEST (split layout) ── -->
+        <div id="pdf-test-layout" style="display:none;">
+            <div class="pdf-test-wrapper">
+                <!-- Left: PDF Viewer -->
+                <div class="pdf-viewer-panel">
+                    <iframe id="pdf-iframe" src="" title="Тест PDF"></iframe>
                 </div>
-                <button class="btn btn-primary" onclick="submitTest()">Тестти аяктоо</button>
+
+                <!-- Right: Answer Sheet (sticky) -->
+                <div class="answer-sheet-panel">
+                    <div class="answer-sheet-header">
+                        <h3>📝 Жооп парагы</h3>
+                        <span class="section-badge" id="pdf-section-badge">Бөлүм 1</span>
+                    </div>
+                    <div class="answer-sheet-scroll">
+                        <div id="pdf-answer-grid" class="answer-grid"></div>
+                    </div>
+                    <div class="answer-sheet-footer">
+                        <button class="btn btn-primary" id="pdf-finish-btn" onclick="submitTest()" style="width:100%;padding:12px;font-size:15px;">🏁 Финиш</button>
+                    </div>
+                </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Break / Pause Screen -->
+    <div class="break-screen" id="break-screen">
+        <div class="break-title">☕ Үзгүлтүк</div>
+        <div class="break-timer" id="break-timer">05:00</div>
+        <div class="break-subtitle">Кийинки бөлүм башталаарга аз убакыт калды</div>
+        <div class="break-video-container" id="break-video-container" style="display:none;">
+            <div class="video-wrapper">
+                <iframe id="break-video-iframe" src="" allow="autoplay" allowfullscreen></iframe>
+            </div>
+        </div>
+    </div>
+
+    <!-- Congratulations Modal -->
+    <div class="congrats-modal-overlay" id="congrats-modal">
+        <div class="congrats-modal-box">
+            <div class="congrats-icon">🎉</div>
+            <h2 id="congrats-title">Тест ийгиликтүү аяктады!</h2>
+            <p id="congrats-message">Натыйжалар мугалимдерибизге жөнөтүлдү. Жакынкы убакытта биз менен байланышабыз!</p>
+            <div class="congrats-video-wrap" id="congrats-video-wrap" style="display:none;">
+                <div class="video-wrapper">
+                    <iframe id="congrats-video-iframe" src="" allowfullscreen></iframe>
+                </div>
+            </div>
+            <a id="congrats-whatsapp-btn" href="https://wa.me/996555123456" target="_blank"
+               class="btn btn-whatsapp" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:12px;background:#25D366;color:white;border-radius:8px;padding:12px 24px;text-decoration:none;font-weight:700;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+                WhatsApp менен байланышуу
+            </a>
+            <button class="btn btn-secondary" onclick="showHome()" style="width:100%;">Башкы бетке</button>
         </div>
     </div>
 
@@ -476,7 +540,7 @@
                                         <th style="padding: 12px; border-bottom: 2px solid #ddd;">Регион</th>
                                         <th style="padding: 12px; border-bottom: 2px solid #ddd;">Тест</th>
                                         <th style="padding: 12px; border-bottom: 2px solid #ddd;">Балл ОРТ</th>
-                                        <th style="padding: 12px; border-bottom: 2px solid #ddd;">⚠️ Слабые темы</th>
+                                        <th style="padding: 12px; border-bottom: 2px solid #ddd;">⚠️ Кайталоо</th>
                                         <th style="padding: 12px; border-bottom: 2px solid #ddd;">Удалить</th>
                                         <th style="padding: 12px; border-bottom: 2px solid #ddd;">Сертификат</th>
                                     </tr>
@@ -489,10 +553,78 @@
                     </div>
                 </div>
 
-                <!-- 2. Tests Section — Test Constructor -->
+                <!-- 2. Tests Section — Test Constructor + PDF Upload -->
                 <div id="section-tests" class="admin-tab">
 
-                    <!-- ═══ TEST CONSTRUCTOR ═══ -->
+                    <!-- Tab switcher -->
+                    <div class="admin-test-tabs">
+                        <button class="admin-test-tab-btn active" onclick="switchTestAdminTab('constructor')">📝 Конструктор тестов</button>
+                        <button class="admin-test-tab-btn" onclick="switchTestAdminTab('pdf')">📄 PDF Загрузчик</button>
+                    </div>
+
+                    <!-- PDF Upload Panel -->
+                    <div class="admin-test-tab-panel" id="admin-test-tab-pdf">
+                        <div class="admin-section">
+                            <h3 style="margin-bottom:16px;">📄 Загрузить PDF-тест (Testing.kg стиль)</h3>
+                            <div style="background:#fff8e1;border:1px solid #f59e0b;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:#92400e;">
+                                💡 Загрузите один PDF файл со всеми вопросами. Укажите количество вопросов и выберите правильный вариант для каждого.
+                            </div>
+                            <form id="pdf-upload-form" onsubmit="event.preventDefault(); uploadPDFTest()">
+                                <div class="form-group">
+                                    <label>Название теста</label>
+                                    <input type="text" id="pdf-test-name" placeholder="Мисалы: ОРТ 2024 Математика" required>
+                                </div>
+                                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                                    <div class="form-group">
+                                        <label>Язык</label>
+                                        <select id="pdf-test-language">
+                                            <option value="KG">🇰🇬 Кыргызча</option>
+                                            <option value="RU">🇷🇺 Русский</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Тип теста</label>
+                                        <select id="pdf-test-type">
+                                            <option value="standard">Стандартный</option>
+                                            <option value="math">Математика ОРТ</option>
+                                            <option value="kyrgyz">Кыргызский язык</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label>Количество вопросов</label>
+                                    <div style="display:flex;gap:12px;align-items:center;">
+                                        <input type="number" id="pdf-question-count" min="1" max="150" value="30" style="width:100px;" oninput="generatePDFAnswerMapper()">
+                                        <button type="button" class="btn btn-secondary" onclick="generatePDFAnswerMapper()" style="padding:8px 16px;font-size:13px;">Применить</button>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label>PDF Файл теста</label>
+                                    <div style="border:2px dashed #e5e7eb;border-radius:10px;padding:20px;text-align:center;cursor:pointer;" onclick="document.getElementById('pdf-file-input').click()">
+                                        <div style="font-size:32px;margin-bottom:8px;">📄</div>
+                                        <div id="pdf-file-label" style="font-size:14px;color:#666;">Нажмите для выбора PDF файла</div>
+                                    </div>
+                                    <input type="file" id="pdf-file-input" accept=".pdf" style="display:none;" onchange="handlePDFFileSelect(event)">
+                                </div>
+                                <div class="form-group">
+                                    <label>Правильные ответы (А/Б/В/Г/Д)</label>
+                                    <div class="pdf-answer-mapper" id="pdf-answer-mapper">
+                                        <p style="color:#999;font-size:13px;">Сначала укажите количество вопросов выше</p>
+                                    </div>
+                                </div>
+                                <div style="display:flex;gap:12px;align-items:center;margin-top:4px;">
+                                    <label style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;cursor:pointer;">
+                                        <input type="checkbox" id="pdf-is-link-only" style="width:16px;height:16px;">
+                                        🔗 Только по ссылке
+                                    </label>
+                                </div>
+                                <button type="submit" class="btn btn-primary" style="width:100%;margin-top:16px;background:#e31e24;">💾 Сохранить PDF тест</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- ═══ TEST CONSTRUCTOR (default tab) ═══ -->
+                    <div class="admin-test-tab-panel active" id="admin-test-tab-constructor">
                     <div id="test-constructor-wrapper">
 
                         <!-- Top Meta Bar -->
@@ -637,7 +769,8 @@
                             <p>Загрузка...</p>
                         </div>
                     </div>
-                </div>
+                    </div><!-- /admin-test-tab-constructor -->
+                </div><!-- /section-tests -->
 
                 <!-- 3. Video Section -->
                 <div id="section-videos" class="admin-tab">
@@ -674,9 +807,70 @@
 
                 <!-- 4. CMS Section -->
                 <div id="section-cms" class="admin-tab">
-                    <div class="admin-section" style="margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px;">
-                        <h2>Управление текстами (CMS)</h2>
-                        <p style="color: #666; margin-bottom: 20px;">Редактирование секции "Знакомо?"</p>
+                    <div class="admin-section" style="padding-top:20px;">
+                        <h2 style="margin-bottom:20px;">✍️ CMS — Управление контентом</h2>
+
+                        <!-- Settings block -->
+                        <div class="cms-settings-grid">
+
+                            <!-- WhatsApp Number -->
+                            <div class="cms-settings-card">
+                                <h4>📱 WhatsApp номер (для кнопок связи)</h4>
+                                <div style="display:flex;gap:10px;">
+                                    <input type="text" id="cms-whatsapp" placeholder="996555123456" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;">
+                                    <button class="btn btn-primary" onclick="saveCMSSetting('whatsapp_number', 'cms-whatsapp')" style="padding:10px 16px;font-size:13px;">💾 Сохранить</button>
+                                </div>
+                                <small style="color:#999;font-size:12px;">Только цифры, без +. Пример: 996555123456</small>
+                            </div>
+
+                            <!-- Landing Hero Title -->
+                            <div class="cms-settings-card">
+                                <h4>🏠 Заголовок главной страницы</h4>
+                                <textarea id="cms-landing-title" rows="2" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;resize:vertical;" placeholder="Кереге окуу борбору менен 200+ баллга жет"></textarea>
+                                <div style="margin-top:8px;">
+                                    <label style="font-size:12px;color:#666;">Видео URL (YouTube/Instagram)</label>
+                                    <input type="text" id="cms-landing-title-video" placeholder="https://..." style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+                                </div>
+                                <button class="btn btn-primary" onclick="saveCMSSetting('landing_hero_title', 'cms-landing-title', 'cms-landing-title-video')" style="margin-top:8px;padding:8px 16px;font-size:13px;">💾 Сохранить</button>
+                            </div>
+
+                            <!-- Landing Subtitle -->
+                            <div class="cms-settings-card">
+                                <h4>🏠 Подзаголовок главной страницы</h4>
+                                <textarea id="cms-landing-subtitle" rows="3" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;resize:vertical;" placeholder="Бул тест сенин чыныгы деңгээлиңди аныктайт..."></textarea>
+                                <div style="margin-top:8px;">
+                                    <label style="font-size:12px;color:#666;">Видео URL (YouTube/Instagram)</label>
+                                    <input type="text" id="cms-landing-subtitle-video" placeholder="https://..." style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+                                </div>
+                                <button class="btn btn-primary" onclick="saveCMSSetting('landing_hero_subtitle', 'cms-landing-subtitle', 'cms-landing-subtitle-video')" style="margin-top:8px;padding:8px 16px;font-size:13px;">💾 Сохранить</button>
+                            </div>
+
+                            <!-- Company Description -->
+                            <div class="cms-settings-card">
+                                <h4>🏢 Описание компании (страница «О нас»)</h4>
+                                <textarea id="cms-company-desc" rows="4" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;resize:vertical;" placeholder="KEREGE — ОРТ/ЖРТга даярдоочу профессионал борбор..."></textarea>
+                                <div style="margin-top:8px;">
+                                    <label style="font-size:12px;color:#666;">Видео URL (YouTube/Instagram)</label>
+                                    <input type="text" id="cms-company-video" placeholder="https://..." style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+                                </div>
+                                <button class="btn btn-primary" onclick="saveCMSSetting('company_description', 'cms-company-desc', 'cms-company-video')" style="margin-top:8px;padding:8px 16px;font-size:13px;">💾 Сохранить</button>
+                            </div>
+
+                            <!-- Congratulation Text -->
+                            <div class="cms-settings-card">
+                                <h4>🎉 Текст поздравления (после теста)</h4>
+                                <textarea id="cms-congrats-text" rows="3" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:14px;resize:vertical;" placeholder="Тест ийгиликтүү бүттү!..."></textarea>
+                                <div style="margin-top:8px;">
+                                    <label style="font-size:12px;color:#666;">Видео URL (YouTube/Instagram)</label>
+                                    <input type="text" id="cms-congrats-video" placeholder="https://..." style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+                                </div>
+                                <button class="btn btn-primary" onclick="saveCMSSetting('congrats_text', 'cms-congrats-text', 'cms-congrats-video')" style="margin-top:8px;padding:8px 16px;font-size:13px;">💾 Сохранить</button>
+                            </div>
+
+                        </div>
+
+                        <!-- Existing problems/content blocks -->
+                        <h3 style="margin-top:28px;margin-bottom:12px;">📋 Блоки «Таанышпы?»</h3>
                         <div id="admin-cms-list"
                             style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
                             <p>Загрузка контента...</p>

@@ -211,7 +211,12 @@
 
         const photoHtml = student.photo_url
             ? `<img src="${student.photo_url}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;" crossorigin="anonymous"/>`
-            : '';
+            : `<svg viewBox="0 0 160 190" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;">
+                <rect width="160" height="190" fill="#f0f0f0" rx="6"/>
+                <circle cx="80" cy="72" r="34" fill="#ccc"/>
+                <ellipse cx="80" cy="160" rx="55" ry="38" fill="#ccc"/>
+                <text x="80" y="185" text-anchor="middle" font-size="11" fill="#aaa" font-family="Arial">Фото жок</text>
+               </svg>`;
 
         const goodLines = boxes.good.map(l => `<div style="margin-bottom:5px;font-size:11px;">• ${l}</div>`).join('');
         const badLines  = boxes.bad.map(l  => `<div style="margin-bottom:5px;font-size:11px;">• ${l}</div>`).join('');
@@ -383,20 +388,45 @@
                     box-shadow: 2px 3px 10px rgba(0,0,0,0.3);
                 ">
                     <div style="font-size:11px; font-weight:700; margin-bottom:8px; opacity:0.85; text-transform:uppercase; letter-spacing:0.5px; border-bottom:1px solid rgba(255,255,255,0.25); padding-bottom:5px;">
-                        ⚠️ Кайталоо керек
+                        ⚠️ Алсыз темалар
                     </div>
                     ${badLines}
                 </div>
             </div>
 
-            <!-- FOOTER TEXT -->
-            <div style="margin-top:6px;">
+            <!-- FOOTER TEXT + DIGITAL SEAL -->
+            <div style="margin-top:6px;position:relative;">
                 <p style="font-style:italic; font-size:12px; color:#222; margin:0 0 12px 0;">
                     Бул тесттин жыйынтыгы " Кереге" окуу борбору тарабынан берилди.
                 </p>
                 <div class="cert-field-row">
                     <span style="font-style:italic; font-size:13px; color:#333; width:55px;">Дата</span>
                     <span class="cert-line">&nbsp;${dateStr}</span>
+                </div>
+                <!-- Digital Seal -->
+                <div style="position:absolute;bottom:-10px;right:0;opacity:0.85;">
+                    <svg viewBox="0 0 130 130" xmlns="http://www.w3.org/2000/svg" style="width:110px;height:110px;">
+                        <!-- Outer dashed ring -->
+                        <circle cx="65" cy="65" r="60" fill="none" stroke="#8B0000" stroke-width="2.5" stroke-dasharray="6 3"/>
+                        <circle cx="65" cy="65" r="50" fill="none" stroke="#8B0000" stroke-width="1"/>
+                        <!-- Inner fill -->
+                        <circle cx="65" cy="65" r="46" fill="rgba(139,0,0,0.06)"/>
+                        <!-- Star points -->
+                        <polygon points="65,20 68,56 65,62 62,56" fill="#8B0000" opacity="0.5"/>
+                        <polygon points="65,110 68,74 65,68 62,74" fill="#8B0000" opacity="0.5"/>
+                        <polygon points="20,65 56,62 62,65 56,68" fill="#8B0000" opacity="0.5"/>
+                        <polygon points="110,65 74,62 68,65 74,68" fill="#8B0000" opacity="0.5"/>
+                        <!-- Center logo text -->
+                        <text x="65" y="55" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#8B0000" letter-spacing="1">КЕРЕГЕ</text>
+                        <text x="65" y="70" text-anchor="middle" font-family="Arial, sans-serif" font-size="7.5" fill="#8B0000">ОКУУ БОРБОРУ</text>
+                        <!-- Circular text path -->
+                        <defs>
+                            <path id="sealCircle" d="M65,15 a50,50 0 1,1 -0.1,0"/>
+                        </defs>
+                        <text font-size="7" fill="#8B0000" font-family="Arial">
+                            <textPath href="#sealCircle" startOffset="5%">✦ KEREGE OKUU BORBORU ✦ ОФИЦИАЛДУУ ЖЫЙЫНТЫК ✦</textPath>
+                        </text>
+                    </svg>
                 </div>
             </div>
 

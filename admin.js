@@ -988,3 +988,229 @@ async function copyTestLink(testId) {
 
 window.toggleAccessWindow = toggleAccessWindow;
 window.copyTestLink = copyTestLink;
+
+// =====================================================
+// Admin Test Tabs (Constructor vs PDF)
+// =====================================================
+function switchTestAdminTab(tab) {
+    document.querySelectorAll('.admin-test-tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.admin-test-tab-panel').forEach(p => p.classList.remove('active'));
+
+    const activePanelId = 'admin-test-tab-' + tab;
+    const activePanel = document.getElementById(activePanelId);
+    if (activePanel) activePanel.classList.add('active');
+
+    document.querySelectorAll('.admin-test-tab-btn').forEach(btn => {
+        if (btn.getAttribute('onclick') && btn.getAttribute('onclick').includes(`'${tab}'`)) {
+            btn.classList.add('active');
+        }
+    });
+}
+window.switchTestAdminTab = switchTestAdminTab;
+
+// =====================================================
+// PDF Test Upload
+// =====================================================
+let _pdfAnswerKey = {};  // { 1: 'А', 2: 'Б', ... }
+let _pdfBase64 = null;
+
+function handlePDFFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file || file.type !== 'application/pdf') {
+        alert('Пожалуйста, выберите PDF файл');
+        return;
+    }
+    const label = document.getElementById('pdf-file-label');
+    if (label) label.textContent = `✅ ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
+
+    const reader = new FileReader();
+    reader.onload = e => { _pdfBase64 = e.target.result; };
+    reader.readAsDataURL(file);
+}
+window.handlePDFFileSelect = handlePDFFileSelect;
+
+function generatePDFAnswerMapper() {
+    const countInput = document.getElementById('pdf-question-count');
+    const count = parseInt(countInput?.value) || 30;
+    const container = document.getElementById('pdf-answer-mapper');
+    if (!container) return;
+
+    _pdfAnswerKey = {};
+    const options = ['А', 'Б', 'В', 'Г', 'Д'];
+
+    let html = '';
+    for (let i = 1; i <= count; i++) {
+        html += `<div class="pdf-answer-row">
+            <div class="pdf-q-num">${i}</div>
+            <div class="pdf-answer-options">
+                ${options.map(opt => `
+                    <button type="button" class="pdf-answer-opt-btn"
+                        data-q="${i}" data-opt="${opt}"
+                        onclick="selectPDFAnswer(${i}, '${opt}', this)">
+                        ${opt}
+                    </button>
+                `).join('')}
+            </div>
+        </div>`;
+    }
+    container.innerHTML = html;
+}
+window.generatePDFAnswerMapper = generatePDFAnswerMapper;
+
+function selectPDFAnswer(qNum, option, btn) {
+    // Deselect siblings
+    const row = btn.closest('.pdf-answer-row');
+    row.querySelectorAll('.pdf-answer-opt-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    _pdfAnswerKey[qNum] = option;
+}
+window.selectPDFAnswer = selectPDFAnswer;
+
+async function uploadPDFTest() {
+    const name = document.getElementById('pdf-test-name')?.value?.trim();
+    const language = document.getElementById('pdf-test-language')?.value || 'KG';
+    const testType = document.getElementById('pdf-test-type')?.value || 'standard';
+    const questionCount = parseInt(document.getElementById('pdf-question-count')?.value) || 30;
+    const isLinkOnly = document.getElementById('pdf-is-link-only')?.checked || false;
+
+    if (!name) { alert('Введите название теста'); return; }
+    if (!_pdfBase64) { alert('Выберите PDF файл'); return; }
+
+    // Build answer key array from _pdfAnswerKey
+    const answerKey = [];
+    for (let i = 1; i <= questionCount; i++) {
+        answerKey.push(_pdfAnswerKey[i] || 'А');
+    }
+
+    const submitBtn = document.querySelector('#pdf-upload-form button[type="submit"]');
+    if (submitBtn) { submitBtn.textContent = '⏳ Сохранение...'; submitBtn.disabled = true; }
+
+    try {
+        const testData = {
+            name,
+            language,
+            test_type: testType,
+            duration: testType === 'math' ? 90 : testType === 'kyrgyz' ? 125 : questionCount * 1.5,
+            answer_key: answerKey,
+            question_count: questionCount,
+            pdf_url: _pdfBase64,
+            is_pdf: true,
+            is_link_only: isLinkOnly,
+            photo_urls: [],
+            created_at: new Date().toISOString()
+        };
+
+        const { data, error } = await window.supabaseClient
+            .from('tests')
+            .insert([testData])
+            .select();
+
+        if (error) throw error;
+
+        showAdminToast('✅ PDF тест сохранён!', 'success');
+        document.getElementById('pdf-upload-form').reset();
+        _pdfBase64 = null;
+        _pdfAnswerKey = {};
+        document.getElementById('pdf-file-label').textContent = 'Нажмите для выбора PDF файла';
+        document.getElementById('pdf-answer-mapper').innerHTML = '<p style="color:#999;font-size:13px;">Сначала укажите количество вопросов выше</p>';
+
+        if (typeof invalidateTestsCache === 'function') invalidateTestsCache();
+        loadAdminTests();
+
+    } catch (err) {
+        console.error('PDF upload error:', err);
+        showAdminToast('❌ Ошибка: ' + err.message, 'error');
+    } finally {
+        if (submitBtn) { submitBtn.textContent = '💾 Сохранить PDF тест'; submitBtn.disabled = false; }
+    }
+}
+window.uploadPDFTest = uploadPDFTest;
+
+// =====================================================
+// CMS Settings — Individual key save/load
+// =====================================================
+async function loadCMSSettings() {
+    if (!window.supabaseClient) return;
+    try {
+        const { data } = await window.supabaseClient
+            .from('content_blocks')
+            .select('key,value,video_url')
+            .in('key', ['whatsapp_number', 'landing_hero_title', 'landing_hero_subtitle', 'company_description', 'congrats_text']);
+
+        if (!data) return;
+        const map = {};
+        data.forEach(r => { map[r.key] = { value: r.value, video: r.video_url }; });
+
+        const fields = {
+            'whatsapp_number': { text: 'cms-whatsapp' },
+            'landing_hero_title': { text: 'cms-landing-title', video: 'cms-landing-title-video' },
+            'landing_hero_subtitle': { text: 'cms-landing-subtitle', video: 'cms-landing-subtitle-video' },
+            'company_description': { text: 'cms-company-desc', video: 'cms-company-video' },
+            'congrats_text': { text: 'cms-congrats-text', video: 'cms-congrats-video' }
+        };
+
+        Object.entries(fields).forEach(([key, cfg]) => {
+            if (!map[key]) return;
+            const textEl = document.getElementById(cfg.text);
+            if (textEl) textEl.value = map[key].value || '';
+            
+            if (cfg.video) {
+                const videoEl = document.getElementById(cfg.video);
+                if (videoEl) videoEl.value = map[key].video || '';
+            }
+        });
+    } catch (e) { console.warn('CMS load error:', e); }
+}
+window.loadCMSSettings = loadCMSSettings;
+
+async function saveCMSSetting(key, inputId, videoInputId = null) {
+    const el = document.getElementById(inputId);
+    if (!el) return;
+    const value = el.value.trim();
+    
+    let video_url = null;
+    if (videoInputId) {
+        const videoEl = document.getElementById(videoInputId);
+        if (videoEl) video_url = videoEl.value.trim();
+    }
+
+    try {
+        // Fix for NOT NULL constraint: provide defaults for icon, title, description if not present
+        // We use upsert to create or update. 
+        const { error } = await window.supabaseClient
+            .from('content_blocks')
+            .upsert([{ 
+                key, 
+                value, 
+                video_url,
+                label: key, 
+                icon: '⚙️', 
+                title: key, 
+                description: 'CMS Settings',
+                updated_at: new Date().toISOString() 
+            }], { onConflict: 'key' });
+
+        if (error) throw error;
+        showAdminToast('✅ Сохранено!', 'success');
+
+        // Live-update WhatsApp links if applicable
+        if (key === 'whatsapp_number') {
+            const num = value.replace(/\D/g, '');
+            document.querySelectorAll('a[href^="https://wa.me/"]').forEach(a => {
+                const msg = a.href.split('?')[1] || '';
+                a.href = `https://wa.me/${num}${msg ? '?' + msg : ''}`;
+            });
+        }
+    } catch (err) {
+        showAdminToast('❌ Ошибка: ' + err.message, 'error');
+    }
+}
+window.saveCMSSetting = saveCMSSetting;
+
+// Load CMS settings when admin content is shown
+const _origAdminLogin = window.adminLogin;
+window.adminLogin = function(event) {
+    if (_origAdminLogin) _origAdminLogin(event);
+    // After login, load CMS settings
+    setTimeout(loadCMSSettings, 500);
+};

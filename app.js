@@ -20,24 +20,93 @@ document.addEventListener('DOMContentLoaded', () => {
     loadTests();
     loadVideos();
     setupWhatsAppMask();
+    loadFrontendCMS();
     checkRoute();
 });
+
+// Load CMS content for landing and about pages
+async function loadFrontendCMS() {
+    if (!window.supabaseApp) return;
+    try {
+        const { data } = await window.supabaseApp
+            .from('content_blocks')
+            .select('key,value,video_url')
+            .in('key', ['landing_hero_title', 'landing_hero_subtitle', 'company_description', 'congrats_text', 'whatsapp_number']);
+
+        if (!data) return;
+        const map = {};
+        data.forEach(r => { map[r.key] = { value: r.value, video: r.video_url }; });
+
+        // Update Hero Title
+        if (map.landing_hero_title) {
+            const el = document.querySelector('.hero-title');
+            if (el) el.textContent = map.landing_hero_title.value;
+            renderCMSVideo('hero-video-container', map.landing_hero_title.video);
+        }
+        
+        // Update Hero Subtitle
+        if (map.landing_hero_subtitle) {
+            const el = document.querySelector('.hero-subtitle');
+            if (el) el.textContent = map.landing_hero_subtitle.value;
+        }
+
+        // Update WhatsApp links globally
+        if (map.whatsapp_number) {
+             const num = map.whatsapp_number.value.replace(/\D/g, '');
+             document.querySelectorAll('a[href^="https://wa.me/"]').forEach(a => {
+                const msg = a.href.split('?')[1] || '';
+                a.href = `https://wa.me/${num}${msg ? '?' + msg : ''}`;
+            });
+        }
+
+        // Update About Us Description
+        if (map.company_description) {
+            const el = document.querySelector('.about-description');
+            if (el) el.textContent = map.company_description.value;
+            renderCMSVideo('about-video-container', map.company_description.video);
+        }
+    } catch (e) { console.warn('Frontend CMS load error:', e); }
+}
+
+function renderCMSVideo(containerId, url) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    
+    if (!url) {
+        container.style.display = 'none';
+        return;
+    }
+
+    const embedUrl = convertToEmbedUrl(url, false);
+    if (embedUrl) {
+        container.innerHTML = `<iframe src="${embedUrl}" frameborder="0" allowfullscreen style="width:100%;height:100%;border-radius:12px;box-shadow: 0 10px 30px rgba(0,0,0,0.15);"></iframe>`;
+        container.style.display = 'block';
+    } else {
+        container.style.display = 'none';
+    }
+}
 
 // Navigation
 function showLanding() {
     document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
     document.getElementById('landing-page').classList.add('active');
+    document.body.classList.remove('test-active');
+    // Hide break screen if active
+    const bs = document.getElementById('break-screen');
+    if (bs) bs.classList.remove('active');
     clearTimer();
 }
 
 function showTestPage() {
     document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
     document.getElementById('test-page').classList.add('active');
+    document.body.classList.add('test-active');
 }
 
 function showAdminPage() {
     document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
     document.getElementById('admin-page').classList.add('active');
+    document.body.classList.remove('test-active');
 }
 
 function showHome() {
@@ -46,6 +115,12 @@ function showHome() {
     const statusScreen = document.getElementById('linked-test-status');
     if (statusScreen) statusScreen.remove();
     document.getElementById('landing-page').classList.add('active');
+    document.body.classList.remove('test-active');
+    // Hide break/congrats overlays
+    const bs = document.getElementById('break-screen');
+    if (bs) bs.classList.remove('active');
+    const cm = document.getElementById('congrats-modal');
+    if (cm) cm.classList.remove('active');
     updateNavLinks('home');
     window.scrollTo(0, 0);
 }
@@ -53,6 +128,7 @@ function showHome() {
 function showAbout() {
     document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
     document.getElementById('about-page').classList.add('active');
+    document.body.classList.remove('test-active');
     updateNavLinks('about');
     window.scrollTo(0, 0);
 }
@@ -152,6 +228,17 @@ async function validateAccessCode(code) {
             return;
         }
 
+        // Check is_used (one-time link)
+        if (data.is_used) {
+            showLinkedTestStatus(
+                '🔒',
+                'Ссылка уже использована',
+                'Эта ссылка была использована ранее и больше не действительна. Обратитесь к преподавателю за новой.',
+                true
+            );
+            return;
+        }
+
         // Check expiry
         if (data.expires_at && new Date(data.expires_at) < new Date()) {
             const expired = new Date(data.expires_at).toLocaleString('ru-RU');
@@ -163,6 +250,14 @@ async function validateAccessCode(code) {
             );
             return;
         }
+
+        // Mark as used (one-time link)
+        try {
+            await supabaseApp
+                .from('test_access_links')
+                .update({ is_used: true, used_at: new Date().toISOString() })
+                .eq('access_code', code);
+        } catch (e) { console.warn('Could not mark link as used:', e); }
 
         // Valid — clean up URL and load test
         history.replaceState(null, '', location.pathname);
@@ -456,13 +551,48 @@ async function startTest() {
     testStartTime = Date.now();
     currentPhotoIndex = 0;
 
-    // Initialize Image
-    updateTestImage();
+    // Detect test type and show appropriate layout
+    const isPDFTest = !!(currentTest.is_pdf && currentTest.pdf_url);
+
+    if (isPDFTest) {
+        // PDF test layout
+        document.getElementById('image-test-layout').style.display = 'none';
+        document.getElementById('pdf-test-layout').style.display = 'block';
+
+        // Load PDF into iframe via blob URL
+        const pdfData = currentTest.pdf_url;
+        let pdfSrc = pdfData;
+        if (pdfData && pdfData.startsWith('data:')) {
+            // Convert base64 data URL to blob URL for iframe
+            try {
+                const byteStr = atob(pdfData.split(',')[1]);
+                const arr = new Uint8Array(byteStr.length);
+                for (let i = 0; i < byteStr.length; i++) arr[i] = byteStr.charCodeAt(i);
+                const blob = new Blob([arr], { type: 'application/pdf' });
+                pdfSrc = URL.createObjectURL(blob);
+            } catch (e) { pdfSrc = pdfData; }
+        }
+        const pdfIframe = document.getElementById('pdf-iframe');
+        if (pdfIframe) pdfIframe.src = pdfSrc;
+
+        // Generate answer grid in right panel
+        generateAnswerGrid(currentTest.answer_key.length, 'pdf-answer-grid');
+
+        // Set up block structure for PDF tests
+        setupPDFTestBlocks();
+    } else {
+        // Image-based test layout
+        document.getElementById('image-test-layout').style.display = 'block';
+        document.getElementById('pdf-test-layout').style.display = 'none';
+
+        // Initialize Image
+        updateTestImage();
+
+        // Generate answer grid in standard panel
+        generateAnswerGrid(currentTest.answer_key.length, 'answer-grid');
+    }
 
     document.getElementById('test-title').textContent = currentTest.name;
-
-    // Generate answer grid
-    generateAnswerGrid(currentTest.answer_key.length);
 
     // Start timer
     startTimer(currentTest.duration);
@@ -470,6 +600,127 @@ async function startTest() {
     // Show test page
     showTestPage();
 }
+
+// ── PDF Block Structure Setup ──────────────────────────────
+function setupPDFTestBlocks() {
+    const testType = currentTest.test_type || currentTest.type || 'standard';
+    const qCount = currentTest.answer_key ? currentTest.answer_key.length : (currentTest.question_count || 30);
+
+    if (testType === 'math') {
+        // Математика: часть 1 (30 мин, вопр 1-30) → ПАУЗА 5 мин → часть 2 (60 мин, вопр 31-60)
+        testStructure = {
+            sections: [
+                { name: 'I бөлүк', duration: 30, start: 1, end: Math.min(30, qCount), isBreak: false },
+                { isBreak: true, duration: 5, name: 'Үзгүлтүк' },
+                { name: 'II бөлүк', duration: 60, start: 31, end: qCount, isBreak: false }
+            ]
+        };
+        currentSection = 0;
+        startPDFSection(0);
+    } else if (testType === 'kyrgyz') {
+        // Кыргызский: Аналогии (30 мин) → Чтение (60 мин) → Грамматика (35 мин)
+        testStructure = {
+            sections: [
+                { name: 'Аналогиялар', duration: 30, start: 1, end: Math.min(30, qCount), isBreak: false },
+                { name: 'Окуп түшүнүү', duration: 60, start: 31, end: Math.min(60, qCount), isBreak: false },
+                { name: 'Грамматика', duration: 35, start: 61, end: qCount, isBreak: false }
+            ]
+        };
+        currentSection = 0;
+        startPDFSection(0);
+    } else {
+        // Standard: single timer
+        testStructure = null;
+        document.getElementById('section-label').textContent = '';
+    }
+}
+
+function startPDFSection(sectionIndex) {
+    if (!testStructure || sectionIndex >= testStructure.sections.length) {
+        submitTest();
+        return;
+    }
+    currentSection = sectionIndex;
+    const section = testStructure.sections[sectionIndex];
+
+    if (section.isBreak) {
+        showBreakScreen(section.duration, sectionIndex);
+    } else {
+        // Update section badge
+        const badge = document.getElementById('pdf-section-badge');
+        if (badge) badge.textContent = section.name;
+        const label = document.getElementById('section-label');
+        if (label) label.textContent = section.name;
+        clearTimer();
+        startTimer(section.duration);
+    }
+}
+
+// ── Break Screen ───────────────────────────────────────────
+let _breakInterval = null;
+
+async function showBreakScreen(durationMinutes, nextSectionIndexAfterBreak) {
+    clearTimer();
+    const breakScreen = document.getElementById('break-screen');
+    if (breakScreen) breakScreen.classList.add('active');
+
+    // Try to load a marketing video for break
+    try {
+        if (window.supabaseApp || window.supabaseClient) {
+            const sb = window.supabaseApp || window.supabaseClient;
+            const { data } = await sb.from('marketing_videos').select('youtube_url,title').limit(1).single();
+            if (data && data.youtube_url) {
+                const embedUrl = convertToEmbedUrl(data.youtube_url, true);
+                const iframe = document.getElementById('break-video-iframe');
+                const container = document.getElementById('break-video-container');
+                if (iframe && embedUrl) {
+                    iframe.src = embedUrl;
+                    if (container) container.style.display = 'block';
+                }
+            }
+        }
+    } catch (e) { /* No video — just show timer */ }
+
+    let remaining = durationMinutes * 60;
+    const timerEl = document.getElementById('break-timer');
+
+    function tick() {
+        const m = Math.floor(remaining / 60);
+        const s = remaining % 60;
+        if (timerEl) timerEl.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+        if (remaining <= 0) {
+            clearInterval(_breakInterval);
+            _breakInterval = null;
+            if (breakScreen) breakScreen.classList.remove('active');
+            // Clear break video
+            const iframe = document.getElementById('break-video-iframe');
+            if (iframe) iframe.src = '';
+            const container = document.getElementById('break-video-container');
+            if (container) container.style.display = 'none';
+            // Start next section
+            startPDFSection(nextSectionIndexAfterBreak + 1);
+        }
+        remaining--;
+    }
+    tick();
+    _breakInterval = setInterval(tick, 1000);
+}
+
+function convertToEmbedUrl(url, autoplay) {
+    if (!url) return '';
+    let videoId = '';
+    try {
+        const u = new URL(url);
+        if (u.hostname.includes('youtube.com')) videoId = u.searchParams.get('v') || '';
+        else if (u.hostname.includes('youtu.be')) videoId = u.pathname.slice(1);
+    } catch (e) {
+        const m = url.match(/(?:v=|youtu\.be\/|embed\/)([\w-]{11})/);
+        if (m) videoId = m[1];
+    }
+    if (!videoId) return url;
+    return `https://www.youtube.com/embed/${videoId}${autoplay ? '?autoplay=1&mute=1' : ''}`;
+}
+window.convertToEmbedUrl = convertToEmbedUrl;
 
 let currentPhotoIndex = 0;
 
@@ -518,9 +769,12 @@ function nextImage() {
 window.prevImage = prevImage;
 window.nextImage = nextImage;
 
-function generateAnswerGrid(questionCount) {
-    const grid = document.getElementById('answer-grid');
-    const options = ['A', 'B', 'C', 'D']; // Only 4 options, removed E
+function generateAnswerGrid(questionCount, targetGridId) {
+    const gridId = targetGridId || 'answer-grid';
+    const grid = document.getElementById(gridId);
+    if (!grid) return;
+    // А,Б,В,Г,Д — ORT Kyrgyz 5-option format
+    const options = ['А', 'Б', 'В', 'Г', 'Д'];
 
     grid.innerHTML = '';
 
@@ -533,7 +787,7 @@ function generateAnswerGrid(questionCount) {
         questionNum.textContent = i + '.';
 
         const optionsDiv = document.createElement('div');
-        optionsDiv.className = 'answer-options';
+        optionsDiv.className = 'answer-options answer-options-5';
 
         options.forEach(option => {
             const btn = document.createElement('button');
@@ -564,30 +818,39 @@ function selectAnswer(questionNum, option) {
         return; // Do nothing if clicking the same answer
     }
 
-    // ORT Circle-to-Square Logic
+    // ORT 2-Attempt Logic (KEREGE format)
     if (history.length === 0) {
         // First choice: Filled circle
         history.push(option);
         answers[questionNum] = option;
     } else if (history.length === 1) {
-        // Second choice: Old becomes empty square, new becomes filled circle
-        history.push(option);
-        answers[questionNum] = option;
-    } else if (history.length === 2) {
-        // Third choice: Show warning and make it final square
-        if (!confirm('⚠️ Внимание!\n\nЭто ваш последний выбор для этого вопроса.\nВы уверены, что хотите изменить ответ?')) {
-            return; // Cancel if user doesn't confirm
-        }
+        // Second choice: First stays as empty square, new becomes filled circle
         history.push(option);
         answers[questionNum] = option;
     } else {
-        // Block further changes
-        alert('❌ Вы уже использовали все 3 попытки изменения ответа для этого вопроса!');
+        // BLOCKED — 2 attempts already used
+        showAnswerBlockedToast();
         return;
     }
 
-    // Update visual state
+    // Update visual state in both grids if PDF test
     updateAnswerButtons(questionNum);
+}
+
+function showAnswerBlockedToast() {
+    const old = document.getElementById('answer-blocked-toast');
+    if (old) old.remove();
+    const toast = document.createElement('div');
+    toast.id = 'answer-blocked-toast';
+    toast.style.cssText = `
+        position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:9999;
+        background:#e31e24;color:white;padding:10px 20px;border-radius:30px;
+        font-size:14px;font-weight:700;box-shadow:0 4px 20px rgba(0,0,0,0.3);
+        animation:slideUp .2s ease;
+    `;
+    toast.textContent = '❌ 2 жолудан ашык өзгөртүүгө болбойт!';
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 2000);
 }
 
 function updateAnswerButtons(questionNum) {
@@ -804,8 +1067,8 @@ async function submitTest() {
             console.log('Test result saved:', data);
         }
 
-        // Show lead generation message instead of results
-        showLeadGenerationMessage();
+        // Show congratulations modal
+        showCongratsModal();
 
     } catch (error) {
         console.error('Error submitting test:', error);
@@ -813,7 +1076,53 @@ async function submitTest() {
     }
 }
 
-// Show Lead Generation Message
+
+// Show Congratulations Modal (replaces old success modal)
+async function showCongratsModal() {
+    const overlay = document.getElementById('congrats-modal');
+    if (!overlay) { showLeadGenerationMessage(); return; }
+
+    // Load CMS congrats text + WhatsApp if available
+    try {
+        if (window.supabaseApp || window.supabaseClient) {
+            const sb = window.supabaseApp || window.supabaseClient;
+            const { data: rows } = await sb.from('content_blocks')
+                .select('key,value,video_url')
+                .in('key', ['congrats_text', 'whatsapp_number']);
+            
+            if (rows) {
+                const map = {};
+                rows.forEach(r => { map[r.key] = { value: r.value, video: r.video_url }; });
+
+                if (map.congrats_text) {
+                    const msgEl = document.getElementById('congrats-message');
+                    if (msgEl) msgEl.textContent = map.congrats_text.value;
+                    
+                    if (map.congrats_text.video) {
+                        const embedUrl = convertToEmbedUrl(map.congrats_text.video, true);
+                        const iframe = document.getElementById('congrats-video-iframe');
+                        const wrap = document.getElementById('congrats-video-wrap');
+                        if (iframe && embedUrl) {
+                            iframe.src = embedUrl;
+                            if (wrap) wrap.style.display = 'block';
+                        }
+                    }
+                }
+                
+                if (map.whatsapp_number) {
+                    const waBtn = document.getElementById('congrats-whatsapp-btn');
+                    if (waBtn) {
+                        const num = map.whatsapp_number.value.replace(/\D/g, '');
+                        waBtn.href = `https://wa.me/${num}?text=Мен тесттин баарын тапшырдым!`;
+                    }
+                }
+            }
+        }
+    } catch (e) { console.warn('Congrats modal CMS error:', e); }
+
+    overlay.classList.add('active');
+}
+
 function showLeadGenerationMessage() {
     const modal = document.getElementById('success-modal');
     if (!modal) return;
@@ -823,30 +1132,18 @@ function showLeadGenerationMessage() {
         modalContent.innerHTML = `
         <span class="close" onclick="closeSuccessModal()">×</span>
         <div class="success-icon">🎉</div>
-        <h2 class="modal-title" style="margin-bottom: 16px;">Спасибо за прохождение теста!</h2>
-        
+        <h2 class="modal-title" style="margin-bottom: 16px;">Тест ийгиликтүү аяктады!</h2>
         <div style="background: #f9fafb; border-radius: 12px; padding: 24px; margin: 24px 0; border: 1px solid #e5e7eb;">
-            <div style="font-size: 48px; text-align: center; margin-bottom: 16px;">✅</div>
             <p style="font-size: 16px; color: var(--gray-700); text-align: center; line-height: 1.6; margin: 0;">
-                Ваши результаты <strong>успешно отправлены</strong> в нашу систему.
+                Натыйжалар <strong>жөнөтүлдү</strong>.
             </p>
         </div>
-
-        <p style="font-size: 15px; color: var(--gray-700); text-align: center; margin-bottom: 24px;">
-            Чтобы узнать свой балл и получить подробный разбор теста, свяжитесь с нашим менеджером.
-        </p>
-
-        <div class="contact-buttons" style="display: flex; gap: 12px; margin-bottom: 16px;">
-            <a href="https://wa.me/996555123456?text=%D0%97%D0%B4%D1%80%D0%B0%D0%B2%D1%81%D1%82%D0%B2%D1%83%D0%B9%D1%82%D0%B5!%20%D0%AF%20%D0%BF%D1%80%D0%BE%D1%88%D0%B5%D0%BB(%D0%B0)%20%D1%82%D0%B5%D1%81%D1%82%20%D0%BD%D0%B0%20%D0%B2%D0%B0%D1%88%D0%B5%D0%BC%20%D1%81%D0%B0%D0%B9%D1%82%D0%B5%20%D0%B8%20%D1%85%D0%BE%D1%87%D1%83%20%D1%83%D0%B7%D0%BD%D0%B0%D1%82%D1%8C%20%D1%80%D0%B5%D0%B7%D1%83%D0%BB%D1%8C%D1%82%D0%B0%D1%82%D1%8B." target="_blank" class="btn btn-whatsapp" style="flex: 1; text-align: center;">💬 WhatsApp</a>
-            <a href="tel:+996555123456" class="btn btn-call" style="flex: 1; text-align: center; background: #e31e24; color: white;">📞 Позвонить</a>
-        </div>
-        
-        <button class="btn btn-secondary" onclick="closeSuccessModal()" style="width: 100%;">Вернуться на главную</button>
+        <button class="btn btn-secondary" onclick="closeSuccessModal()" style="width: 100%;">Башкы бетке</button>
         `;
     }
 
     modal.style.display = 'flex';
-    modal.classList.add('active'); // Added to ensure CSS rules apply
+    modal.classList.add('active');
 }
 
 function closeSuccessModal() {
@@ -857,6 +1154,7 @@ function closeSuccessModal() {
     // Navigate to landing page
     showLanding();
 }
+
 
 // Calculate topic analysis
 function calculateTopicAnalysis() {
@@ -1172,7 +1470,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }).join('')}
                     </div>`;
                 } else {
-                    weakTopicsHtml = '<span style="color:#10b981;font-size:12px;">✅ Все темы освоены</span>';
+                    weakTopicsHtml = '<span style="color:#10b981;font-size:12px;">✅ Кайталоо жок</span>';
                 }
             }
 
