@@ -1009,122 +1009,185 @@ function switchTestAdminTab(tab) {
 window.switchTestAdminTab = switchTestAdminTab;
 
 // =====================================================
-// PDF Test Upload
+// SECTIONED TEST BUILDER (NEW)
 // =====================================================
-let _pdfAnswerKey = {};  // { 1: 'А', 2: 'Б', ... }
-let _pdfBase64 = null;
+let _testSections = [];
 
-function handlePDFFileSelect(event) {
-    const file = event.target.files[0];
-    if (!file || file.type !== 'application/pdf') {
-        alert('Пожалуйста, выберите PDF файл');
-        return;
-    }
-    const label = document.getElementById('pdf-file-label');
-    if (label) label.textContent = `✅ ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
-
-    const reader = new FileReader();
-    reader.onload = e => { _pdfBase64 = e.target.result; };
-    reader.readAsDataURL(file);
+function addTestSection() {
+    const id = Date.now();
+    const section = { id, type: 'test', title: '', timer: 30, file: null, videoUrl: '' };
+    _testSections.push(section);
+    renderSections();
 }
-window.handlePDFFileSelect = handlePDFFileSelect;
+window.addTestSection = addTestSection;
 
-function generatePDFAnswerMapper() {
-    const countInput = document.getElementById('pdf-question-count');
-    const count = parseInt(countInput?.value) || 30;
-    const container = document.getElementById('pdf-answer-mapper');
+function removeSection(id) {
+    _testSections = _testSections.filter(s => s.id !== id);
+    renderSections();
+}
+window.removeSection = removeSection;
+
+function renderSections() {
+    const container = document.getElementById('sections-list');
     if (!container) return;
 
-    _pdfAnswerKey = {};
-    const options = ['А', 'Б', 'В', 'Г', 'Д'];
-
-    let html = '';
-    for (let i = 1; i <= count; i++) {
-        html += `<div class="pdf-answer-row">
-            <div class="pdf-q-num">${i}</div>
-            <div class="pdf-answer-options">
-                ${options.map(opt => `
-                    <button type="button" class="pdf-answer-opt-btn"
-                        data-q="${i}" data-opt="${opt}"
-                        onclick="selectPDFAnswer(${i}, '${opt}', this)">
-                        ${opt}
-                    </button>
-                `).join('')}
+    container.innerHTML = _testSections.map((s, index) => `
+        <div class="test-section-card" data-id="${s.id}">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                <h5 style="margin:0;">Раздел #${index + 1}</h5>
+                <button type="button" class="btn btn-danger btn-sm" onclick="removeSection(${s.id})">✕ Удалить</button>
             </div>
-        </div>`;
+            
+            <div class="form-group">
+                <label>Тип раздела</label>
+                <select onchange="updateSectionField(${s.id}, 'type', this.value)">
+                    <option value="test" ${s.type === 'test' ? 'selected' : ''}>📄 Тест (PDF)</option>
+                    <option value="break" ${s.type === 'break' ? 'selected' : ''}>☕ Перерыв (Видео)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Заголовок раздела</label>
+                <input type="text" value="${s.title}" placeholder="Мисалы: Математика 1-бөлүк" 
+                       oninput="updateSectionField(${s.id}, 'title', this.value)">
+            </div>
+
+            <div class="form-group">
+                <label>Время (в минутах)</label>
+                <input type="number" value="${s.timer}" min="1" 
+                       oninput="updateSectionField(${s.id}, 'timer', this.value)">
+            </div>
+
+            ${s.type === 'test' ? `
+                <div class="form-group">
+                    <label>PDF Файл</label>
+                    <div class="pdf-drop-zone" onclick="document.getElementById('file-input-${s.id}').click()">
+                        ${s.file ? `✅ ${s.file.name}` : '📄 Выбрать PDF'}
+                    </div>
+                    <input type="file" id="file-input-${s.id}" accept=".pdf" style="display:none;" 
+                           onchange="handleSectionFileSelect(${s.id}, event)">
+                </div>
+            ` : `
+                <div class="form-group">
+                    <label>Ссылка на видео (YouTube/MP4)</label>
+                    <input type="text" value="${s.videoUrl}" placeholder="https://..." 
+                           oninput="updateSectionField(${s.id}, 'videoUrl', this.value)">
+                </div>
+            `}
+        </div>
+    `).join('');
+}
+
+function updateSectionField(id, field, value) {
+    const section = _testSections.find(s => s.id === id);
+    if (section) {
+        section[field] = value;
+        if (field === 'type') renderSections(); // Re-render for conditional fields
     }
-    container.innerHTML = html;
 }
-window.generatePDFAnswerMapper = generatePDFAnswerMapper;
+window.updateSectionField = updateSectionField;
 
-function selectPDFAnswer(qNum, option, btn) {
-    // Deselect siblings
-    const row = btn.closest('.pdf-answer-row');
-    row.querySelectorAll('.pdf-answer-opt-btn').forEach(b => b.classList.remove('selected'));
-    btn.classList.add('selected');
-    _pdfAnswerKey[qNum] = option;
+function handleSectionFileSelect(id, event) {
+    const file = event.target.files[0];
+    if (file && file.type === 'application/pdf') {
+        updateSectionField(id, 'file', file);
+        renderSections();
+    } else {
+        alert('Выберите PDF файл');
+    }
 }
-window.selectPDFAnswer = selectPDFAnswer;
+window.handleSectionFileSelect = handleSectionFileSelect;
 
-async function uploadPDFTest() {
-    const name = document.getElementById('pdf-test-name')?.value?.trim();
-    const language = document.getElementById('pdf-test-language')?.value || 'KG';
-    const testType = document.getElementById('pdf-test-type')?.value || 'standard';
-    const questionCount = parseInt(document.getElementById('pdf-question-count')?.value) || 30;
-    const isLinkOnly = document.getElementById('pdf-is-link-only')?.checked || false;
+async function saveSectionedTest() {
+    const name = document.getElementById('sec-test-name')?.value?.trim();
+    const language = document.getElementById('sec-test-language')?.value || 'KG';
+    const isLinkOnly = document.getElementById('sec-test-is-link')?.checked || false;
+    const answersRaw = document.getElementById('sec-test-answers')?.value?.trim();
 
     if (!name) { alert('Введите название теста'); return; }
-    if (!_pdfBase64) { alert('Выберите PDF файл'); return; }
+    if (_testSections.length === 0) { alert('Добавьте хотя бы один раздел'); return; }
+    if (!answersRaw) { alert('Введите ключ ответов'); return; }
 
-    // Build answer key array from _pdfAnswerKey
-    const answerKey = [];
-    for (let i = 1; i <= questionCount; i++) {
-        answerKey.push(_pdfAnswerKey[i] || 'А');
-    }
-
-    const submitBtn = document.querySelector('#pdf-upload-form button[type="submit"]');
-    if (submitBtn) { submitBtn.textContent = '⏳ Сохранение...'; submitBtn.disabled = true; }
+    const answers = answersRaw.split(',').map(a => a.trim().toUpperCase()).filter(a => a);
+    
+    const submitBtn = document.getElementById('save-sec-test-btn');
+    const origText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = '⏳ Сохранение разделов...';
 
     try {
+        const sectionsData = [];
+        
+        for (let i = 0; i < _testSections.length; i++) {
+            const s = _testSections[i];
+            const sectionItem = {
+                type: s.type,
+                title: s.title || `Раздел ${i + 1}`,
+                timer_seconds: (parseInt(s.timer) || 30) * 60
+            };
+
+            if (s.type === 'test') {
+                if (!s.file) throw new Error(`Выберите PDF для раздела "${sectionItem.title}"`);
+                
+                submitBtn.textContent = `⏳ Загрузка PDF (${i + 1}/${_testSections.length})...`;
+                
+                // Upload to Supabase Storage
+                const fileName = `${Date.now()}_${s.file.name.replace(/\s+/g, '_')}`;
+                const { data: uploadData, error: uploadError } = await window.supabaseClient.storage
+                    .from('tests')
+                    .upload(`${fileName}`, s.file);
+
+                if (uploadError) throw uploadError;
+
+                // Get Public URL
+                const { data: urlData } = window.supabaseClient.storage
+                    .from('tests')
+                    .getPublicUrl(fileName);
+
+                sectionItem.pdf_url = urlData.publicUrl;
+            } else {
+                sectionItem.video_url = s.videoUrl;
+            }
+            
+            sectionsData.push(sectionItem);
+        }
+
+        submitBtn.textContent = '⏳ Сохранение в базу...';
+
         const testData = {
             name,
             language,
-            test_type: testType,
-            duration: testType === 'math' ? 90 : testType === 'kyrgyz' ? 125 : questionCount * 1.5,
-            answer_key: answerKey,
-            question_count: questionCount,
-            pdf_url: _pdfBase64,
-            is_pdf: true,
             is_link_only: isLinkOnly,
-            photo_urls: [],
+            answer_key: answers,
+            sections: sectionsData,
+            is_pdf: true, // Marker for new layout
+            duration: sectionsData.reduce((acc, s) => acc + (s.timer_seconds / 60), 0),
             created_at: new Date().toISOString()
         };
 
-        const { data, error } = await window.supabaseClient
+        const { error: dbError } = await window.supabaseClient
             .from('tests')
-            .insert([testData])
-            .select();
+            .insert([testData]);
 
-        if (error) throw error;
+        if (dbError) throw dbError;
 
-        showAdminToast('✅ PDF тест сохранён!', 'success');
-        document.getElementById('pdf-upload-form').reset();
-        _pdfBase64 = null;
-        _pdfAnswerKey = {};
-        document.getElementById('pdf-file-label').textContent = 'Нажмите для выбора PDF файла';
-        document.getElementById('pdf-answer-mapper').innerHTML = '<p style="color:#999;font-size:13px;">Сначала укажите количество вопросов выше</p>';
-
-        if (typeof invalidateTestsCache === 'function') invalidateTestsCache();
+        showAdminToast('✅ Тест успешно создан!', 'success');
+        
+        // Reset form
+        _testSections = [];
+        document.getElementById('sectioned-test-form').reset();
+        renderSections();
         loadAdminTests();
 
     } catch (err) {
-        console.error('PDF upload error:', err);
+        console.error('Save error:', err);
         showAdminToast('❌ Ошибка: ' + err.message, 'error');
     } finally {
-        if (submitBtn) { submitBtn.textContent = '💾 Сохранить PDF тест'; submitBtn.disabled = false; }
+        submitBtn.disabled = false;
+        submitBtn.textContent = origText;
     }
 }
-window.uploadPDFTest = uploadPDFTest;
+window.saveSectionedTest = saveSectionedTest;
 
 // =====================================================
 // CMS Settings — Individual key save/load

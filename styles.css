@@ -2260,4 +2260,103 @@ body.test-active .footer {
     display: flex;
     align-items: center;
     gap: 8px;
-}
+}
+/* =
+   SECTION BUILDER (ADMIN)
+    */
+.test-section-card {
+    background: #fdfdfd;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    transition: all 0.2s;
+}
+
+.test-section-card:hover {
+    border-color: var(--primary-red);
+    box-shadow: 0 4px 6px rgba(227,30,36,0.05);
+}
+
+.pdf-drop-zone {
+    border: 2px dashed #cbd5e1;
+    border-radius: 8px;
+    padding: 12px;
+    text-align: center;
+    cursor: pointer;
+    font-size: 14px;
+    color: #64748b;
+    background: #f8fafc;
+    transition: all 0.2s;
+}
+
+.pdf-drop-zone:hover {
+    border-color: var(--primary-red);
+    color: var(--primary-red);
+    background: #fff5f5;
+}
+
+/* 
+   SPLIT-SCREEN TEST LAYOUT (STUDENT)
+    */
+.pdf-test-split-container {
+    display: flex;
+    height: calc(100vh - 70px);
+    overflow: hidden;
+}
+
+.pdf-viewer-pane {
+    flex: 1;
+    height: 100%;
+    overflow-y: auto;
+    background: #525659;
+    display: flex;
+    flex-direction: column;
+}
+
+.answer-sheet-pane {
+    width: 380px;
+    height: 100%;
+    overflow-y: auto;
+    background: white;
+    border-left: 1px solid #e5e7eb;
+    display: flex;
+    flex-direction: column;
+    box-shadow: -4px 0 15px rgba(0,0,0,0.05);
+}
+
+.answer-sheet-header {
+    padding: 20px;
+    background: #f8fafc;
+    border-bottom: 1px solid #e5e7eb;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.answer-sheet-grid {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.sticky-timer-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: white;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    z-index: 5000;
+}
+
+body.test-active .footer {
+    display: none !important;
+}

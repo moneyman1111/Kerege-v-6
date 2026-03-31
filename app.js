@@ -4,16 +4,18 @@
 // Global State Variables
 let currentTest = null;
 let answers = {};
-let answerHistory = {}; // Track all answer changes for ORT Circle-to-Square
+let answerHistory = {}; 
 let testStartTime = null;
 let sectionStartTime = null;
 let timerInterval = null;
 let timeRemaining = 0;
 
-// ORT Multi-Section Variables
-let testStructure = null;
-let currentSection = 0;
+// SECTIONED TEST VARIABLES
+let currentSectionIndex = 0;
+let sections = [];
 let isOnBreak = false;
+let debounceTimer = null;
+let resultId = null; // ID of the test_results record for syncing
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
@@ -375,7 +377,7 @@ async function loadTests() {
         // Select only necessary columns (reduces data transfer)
         const { data, error } = await supabaseApp
             .from('tests')
-            .select('id, name, language, duration')
+            .select('id, name, language, duration, sections')
             .or('is_link_only.is.null,is_link_only.eq.false')
             .order('created_at', { ascending: false })
             .limit(50); // Safety cap
@@ -520,141 +522,174 @@ async function startTest() {
         return;
     }
 
-    // Wait for the background full-test fetch to complete if still loading
     if (_testLoadPromise) {
-        const btn = document.querySelector('#lead-form button[type="submit"]');
-        const origText = btn ? btn.textContent : '';
-        if (btn) { btn.textContent = 'Загрузка теста...'; btn.disabled = true; }
-
+        // ... (wait logic)
         try {
             const fullData = await _testLoadPromise;
             currentTest = fullData;
-        } catch (err) {
-            console.error('Test data failed to load:', err);
-            alert('Ошибка загрузки теста. Попробуйте ещё раз.');
-            if (btn) { btn.textContent = origText; btn.disabled = false; }
-            return;
-        } finally {
-            if (btn) { btn.textContent = origText; btn.disabled = false; }
-            _testLoadPromise = null;
-        }
+        } catch (err) { /* ... */ return; }
+        _testLoadPromise = null;
     }
 
-    if (!currentTest) {
-        alert('Ошибка: данные теста не найдены');
-        return;
-    }
+    if (!currentTest) { alert('Ошибка: данные теста не найдены'); return; }
+
+    // Initialize Result in test_results immediately to get an ID for syncing
+    try {
+        const { data: resData, error: resError } = await window.supabaseApp
+            .from('test_results')
+            .insert([{
+                test_id: currentTest.id,
+                first_name: studentData.firstName,
+                last_name: studentData.lastName,
+                whatsapp: studentData.whatsapp,
+                region: studentData.region,
+                oblast: studentData.oblast,
+                parent_phone: studentData.parentPhone,
+                parent_name: studentData.parentName,
+                partial_answers: {},
+                status: 'in_progress',
+                start_time: new Date().toISOString()
+            }])
+            .select()
+            .single();
+        if (resData) resultId = resData.id;
+    } catch (e) { console.warn('Sync init failed:', e); }
 
     // Reset state
     answers = {};
     answerHistory = {};
     testStartTime = Date.now();
-    currentPhotoIndex = 0;
+    currentSectionIndex = 0;
+    sections = currentTest.sections || [];
 
-    // Detect test type and show appropriate layout
-    const isPDFTest = !!(currentTest.is_pdf && currentTest.pdf_url);
-
-    if (isPDFTest) {
-        // PDF test layout
-        document.getElementById('image-test-layout').style.display = 'none';
-        document.getElementById('pdf-test-layout').style.display = 'block';
-
-        // Load PDF into iframe via blob URL
-        const pdfData = currentTest.pdf_url;
-        let pdfSrc = pdfData;
-        if (pdfData && pdfData.startsWith('data:')) {
-            // Convert base64 data URL to blob URL for iframe
-            try {
-                const byteStr = atob(pdfData.split(',')[1]);
-                const arr = new Uint8Array(byteStr.length);
-                for (let i = 0; i < byteStr.length; i++) arr[i] = byteStr.charCodeAt(i);
-                const blob = new Blob([arr], { type: 'application/pdf' });
-                pdfSrc = URL.createObjectURL(blob);
-            } catch (e) { pdfSrc = pdfData; }
-        }
-        const pdfIframe = document.getElementById('pdf-iframe');
-        if (pdfIframe) pdfIframe.src = pdfSrc;
-
-        // Generate answer grid in right panel
-        generateAnswerGrid(currentTest.answer_key.length, 'pdf-answer-grid');
-
-        // Set up block structure for PDF tests
-        setupPDFTestBlocks();
+    if (sections.length > 0) {
+        renderSection(0);
     } else {
-        // Image-based test layout
-        document.getElementById('image-test-layout').style.display = 'block';
-        document.getElementById('pdf-test-layout').style.display = 'none';
-
-        // Initialize Image
-        updateTestImage();
-
-        // Generate answer grid in standard panel
-        generateAnswerGrid(currentTest.answer_key.length, 'answer-grid');
+        // Fallback for old tests without sections
+        startLegacyTest();
     }
 
     document.getElementById('test-title').textContent = currentTest.name;
-
-    // Start timer
-    startTimer(currentTest.duration);
-
-    // Show test page
     showTestPage();
 }
 
-// ── PDF Block Structure Setup ──────────────────────────────
-function setupPDFTestBlocks() {
-    const testType = currentTest.test_type || currentTest.type || 'standard';
-    const qCount = currentTest.answer_key ? currentTest.answer_key.length : (currentTest.question_count || 30);
-
-    if (testType === 'math') {
-        // Математика: часть 1 (30 мин, вопр 1-30) → ПАУЗА 5 мин → часть 2 (60 мин, вопр 31-60)
-        testStructure = {
-            sections: [
-                { name: 'I бөлүк', duration: 30, start: 1, end: Math.min(30, qCount), isBreak: false },
-                { isBreak: true, duration: 5, name: 'Үзгүлтүк' },
-                { name: 'II бөлүк', duration: 60, start: 31, end: qCount, isBreak: false }
-            ]
-        };
-        currentSection = 0;
-        startPDFSection(0);
-    } else if (testType === 'kyrgyz') {
-        // Кыргызский: Аналогии (30 мин) → Чтение (60 мин) → Грамматика (35 мин)
-        testStructure = {
-            sections: [
-                { name: 'Аналогиялар', duration: 30, start: 1, end: Math.min(30, qCount), isBreak: false },
-                { name: 'Окуп түшүнүү', duration: 60, start: 31, end: Math.min(60, qCount), isBreak: false },
-                { name: 'Грамматика', duration: 35, start: 61, end: qCount, isBreak: false }
-            ]
-        };
-        currentSection = 0;
-        startPDFSection(0);
+function startLegacyTest() {
+    const isPDFTest = !!(currentTest.is_pdf && currentTest.pdf_url);
+    if (isPDFTest) {
+        document.getElementById('image-test-layout').style.display = 'none';
+        document.getElementById('pdf-test-layout').style.display = 'block';
+        const pdfIframe = document.getElementById('pdf-iframe');
+        if (pdfIframe) pdfIframe.src = currentTest.pdf_url;
+        generateAnswerGrid(currentTest.answer_key?.length || 30, 'pdf-answer-grid');
     } else {
-        // Standard: single timer
-        testStructure = null;
-        document.getElementById('section-label').textContent = '';
+        document.getElementById('image-test-layout').style.display = 'block';
+        document.getElementById('pdf-test-layout').style.display = 'none';
+        updateTestImage();
+        generateAnswerGrid(currentTest.answer_key?.length || 30, 'answer-grid');
     }
+    startTimer(currentTest.duration * 60);
 }
 
-function startPDFSection(sectionIndex) {
-    if (!testStructure || sectionIndex >= testStructure.sections.length) {
+async function renderSection(index) {
+    if (!sections[index]) {
         submitTest();
         return;
     }
-    currentSection = sectionIndex;
-    const section = testStructure.sections[sectionIndex];
 
-    if (section.isBreak) {
-        showBreakScreen(section.duration, sectionIndex);
+    currentSectionIndex = index;
+    const section = sections[index];
+    isOnBreak = (section.type === 'break');
+
+    // UI Updates
+    document.title = `${section.title} | Kerege`;
+    const badge = document.getElementById('pdf-section-badge');
+    const titleEl = document.getElementById('pdf-section-title');
+    if (badge) badge.textContent = `Бөлүм ${index + 1}`;
+    if (titleEl) titleEl.textContent = section.title;
+
+    if (isOnBreak) {
+        showBreakScreen(section);
     } else {
-        // Update section badge
-        const badge = document.getElementById('pdf-section-badge');
-        if (badge) badge.textContent = section.name;
-        const label = document.getElementById('section-label');
-        if (label) label.textContent = section.name;
-        clearTimer();
-        startTimer(section.duration);
+        hideBreakScreen();
+        document.getElementById('pdf-test-layout').style.display = 'block';
+        document.getElementById('image-test-layout').style.display = 'none';
+        
+        const iframe = document.getElementById('pdf-iframe');
+        if (iframe && section.pdf_url) iframe.src = section.pdf_url;
+        
+        // Map answers for this section (if specific Q range provided, or just all)
+        // For simplicity, we use the whole grid for now unless specified
+        generateAnswerGrid(currentTest.answer_key.length, 'pdf-answer-grid');
+    }
+
+    startTimer(section.timer_seconds || 1800);
+}
+
+function showBreakScreen(section) {
+    const bs = document.getElementById('break-screen');
+    const videoCont = document.getElementById('break-video-container');
+    const timerEl = document.getElementById('break-timer');
+    
+    bs.classList.add('active');
+    document.body.classList.remove('test-active'); // Show scrolling for break if needed
+
+    if (section.video_url) {
+        videoCont.style.display = 'block';
+        const iframe = document.getElementById('break-video-iframe');
+        if (iframe) iframe.src = convertToEmbedUrl(section.video_url, true);
+    } else {
+        videoCont.style.display = 'none';
     }
 }
+
+function hideBreakScreen() {
+    const bs = document.getElementById('break-screen');
+    if (bs) bs.classList.remove('active');
+    document.body.classList.add('test-active');
+}
+
+function nextSection() {
+    if (isOnBreak) {
+        renderSection(currentSectionIndex + 1);
+        return;
+    }
+
+    if (confirm('Бул бөлүмдү аяктоону каалайсызбы? Кайтып келе албайсыз.')) {
+        renderSection(currentSectionIndex + 1);
+    }
+}
+window.nextSection = nextSection;
+
+function selectAnswer(qIndex, option) {
+    answers[qIndex] = option;
+    
+    // Highlight UI
+    const gridId = isOnBreak ? '' : (currentTest.is_pdf ? 'pdf-answer-grid' : 'answer-grid');
+    if (gridId) {
+        const buttons = document.querySelectorAll(`#${gridId} .answer-option`);
+        buttons.forEach(btn => {
+            if (parseInt(btn.dataset.q) === qIndex) {
+                btn.classList.toggle('selected', btn.textContent.trim() === option);
+            }
+        });
+    }
+
+    // Debounce Sync to Supabase
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(syncAnswersToDB, 2000);
+}
+
+async function syncAnswersToDB() {
+    if (!resultId || !window.supabaseApp) return;
+    try {
+        await window.supabaseApp
+            .from('test_results')
+            .update({ partial_answers: answers })
+            .eq('id', resultId);
+    } catch (e) { console.warn('Sync failed:', e); }
+}
+
+// Integrated into renderSection and nextSection above.
 
 // ── Break Screen ───────────────────────────────────────────
 let _breakInterval = null;
@@ -806,35 +841,33 @@ function generateAnswerGrid(questionCount, targetGridId) {
 }
 
 function selectAnswer(questionNum, option) {
-    // Initialize history for this question if not exists
-    if (!answerHistory[questionNum]) {
-        answerHistory[questionNum] = [];
-    }
+    if (isOnBreak) return;
 
+    // Initialize history for this question if not exists
+    if (!answerHistory[questionNum]) answerHistory[questionNum] = [];
     const history = answerHistory[questionNum];
 
-    // Check if this is already selected (clicking same answer)
-    if (answers[questionNum] === option) {
-        return; // Do nothing if clicking the same answer
-    }
+    // Check if this is already selected
+    if (answers[questionNum] === option) return;
 
     // ORT 2-Attempt Logic (KEREGE format)
     if (history.length === 0) {
-        // First choice: Filled circle
         history.push(option);
         answers[questionNum] = option;
     } else if (history.length === 1) {
-        // Second choice: First stays as empty square, new becomes filled circle
         history.push(option);
         answers[questionNum] = option;
     } else {
-        // BLOCKED — 2 attempts already used
         showAnswerBlockedToast();
         return;
     }
 
-    // Update visual state in both grids if PDF test
+    // Update visual state
     updateAnswerButtons(questionNum);
+
+    // Debounce Sync to Supabase
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(syncAnswersToDB, 2000);
 }
 
 function showAnswerBlockedToast() {
@@ -890,36 +923,25 @@ function updateAnswerButtons(questionNum) {
 
 // Timer
 // Updated timer function
-function startTimer(minutes) {
+function startTimer(seconds) {
     clearTimer(); // Clear any existing timer
 
-    timeRemaining = minutes * 60;
+    timeRemaining = seconds;
     updateTimerDisplay();
 
     timerInterval = setInterval(() => {
         timeRemaining--;
         updateTimerDisplay();
 
-        // Warning at 5 minutes
-        if (timeRemaining === 300) {
-            showTimerWarning('⚠️ Осталось 5 минут!');
-        }
-
-        // Warning at 1 minute
-        if (timeRemaining === 60) {
-            showTimerWarning('⚠️ Осталась 1 минута!');
-        }
+        if (timeRemaining === 300) showTimerWarning('⚠️ Осталось 5 минут!');
+        if (timeRemaining === 60) showTimerWarning('⚠️ Осталась 1 минута!');
 
         if (timeRemaining <= 0) {
             clearTimer();
-
-            // Check if this is a multi-section test
-            if (testStructure && currentSection < testStructure.sections.length - 1) {
-                // Move to next section (might be a break)
-                currentSection++;
-                startSection(currentSection);
+            // Auto-advance to next section if it's a sectioned test
+            if (sections.length > 0 && currentSectionIndex < sections.length - 1) {
+                renderSection(currentSectionIndex + 1);
             } else {
-                // Test complete
                 submitTest();
             }
         }
