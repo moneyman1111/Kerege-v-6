@@ -617,9 +617,21 @@ async function renderSection(index) {
         const iframe = document.getElementById('pdf-iframe');
         if (iframe && section.pdf_url) iframe.src = section.pdf_url;
         
-        // Map answers for this section (if specific Q range provided, or just all)
-        // For simplicity, we use the whole grid for now unless specified
-        generateAnswerGrid(currentTest.answer_key.length, 'pdf-answer-grid');
+        // Calculate global start index for this section's questions
+        let startIndex = 0;
+        for (let i = 0; i < index; i++) {
+            if (sections[i].type === 'test') {
+                startIndex += (sections[i].questions_count || 0);
+            }
+        }
+
+        // Generate grid for this section
+        if (section.questions_config && section.questions_config.length > 0) {
+            generateAnswerGridFromConfig(section.questions_config, 'pdf-answer-grid', startIndex);
+        } else {
+            // Fallback for sections without explicit config (e.g. older tests)
+            generateAnswerGrid(section.questions_count || currentTest.answer_key.length, 'pdf-answer-grid', startIndex);
+        }
     }
 
     startTimer(section.timer_seconds || 1800);
@@ -804,40 +816,58 @@ function nextImage() {
 window.prevImage = prevImage;
 window.nextImage = nextImage;
 
-function generateAnswerGrid(questionCount, targetGridId) {
+function generateAnswerGrid(questionCount, targetGridId, startIndex = 0) {
+    // Legacy fallback or sections with only count
+    const config = [];
+    for (let i = 0; i < questionCount; i++) {
+        config.push({ options_count: 5 }); // Default to 5 for legacy ORT
+    }
+    generateAnswerGridFromConfig(config, targetGridId, startIndex);
+}
+
+function generateAnswerGridFromConfig(config, targetGridId, startIndex = 0) {
     const gridId = targetGridId || 'answer-grid';
     const grid = document.getElementById(gridId);
     if (!grid) return;
-    // А,Б,В,Г,Д — ORT Kyrgyz 5-option format
-    const options = ['А', 'Б', 'В', 'Г', 'Д'];
+
+    const displayMap = { 'A': 'А', 'B': 'Б', 'C': 'В', 'D': 'Г', 'E': 'Д' };
+    const optionsRaw = ['A', 'B', 'C', 'D', 'E'];
 
     grid.innerHTML = '';
 
-    for (let i = 1; i <= questionCount; i++) {
+    config.forEach((q, i) => {
+        const globalNum = startIndex + i + 1;
         const row = document.createElement('div');
         row.className = 'answer-row';
 
         const questionNum = document.createElement('div');
         questionNum.className = 'question-number';
-        questionNum.textContent = i + '.';
+        questionNum.textContent = (i + 1) + '.'; // UI shows 1..N for section
 
         const optionsDiv = document.createElement('div');
-        optionsDiv.className = 'answer-options answer-options-5';
+        const count = q.options_count || 4;
+        optionsDiv.className = `answer-options answer-options-${count}`;
 
-        options.forEach(option => {
+        for (let j = 0; j < count; j++) {
+            const letter = optionsRaw[j];
             const btn = document.createElement('button');
             btn.className = 'answer-btn';
-            btn.textContent = option;
-            btn.onclick = () => selectAnswer(i, option);
-            btn.dataset.question = i;
-            btn.dataset.option = option;
+            btn.textContent = displayMap[letter];
+            btn.onclick = () => selectAnswer(globalNum, letter);
+            btn.dataset.question = globalNum;
+            btn.dataset.option = letter;
             optionsDiv.appendChild(btn);
-        });
+        }
 
         row.appendChild(questionNum);
         row.appendChild(optionsDiv);
         grid.appendChild(row);
-    }
+        
+        // Restore previous answer if exists
+        if (answers[globalNum]) {
+            updateAnswerButtons(globalNum);
+        }
+    });
 }
 
 function selectAnswer(questionNum, option) {

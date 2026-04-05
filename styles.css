@@ -2360,3 +2360,10 @@ body.test-active .footer {
 body.test-active .footer {
     display: none !important;
 }
+
+/* 4 and 5-option answer rows */
+.answer-options-5,
+.answer-options-4 {
+    display: flex;
+    gap: 4px;
+}

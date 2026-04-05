@@ -1015,7 +1015,16 @@ let _testSections = [];
 
 function addTestSection() {
     const id = Date.now();
-    const section = { id, type: 'test', title: '', timer: 30, file: null, videoUrl: '' };
+    const section = { 
+        id, 
+        type: 'test', 
+        title: '', 
+        timer: 30, 
+        file: null, 
+        videoUrl: '',
+        questions_count: 0,
+        questions_config: [] // Array of { correct_answer, options_count }
+    };
     _testSections.push(section);
     renderSections();
 }
@@ -1061,11 +1070,24 @@ function renderSections() {
             ${s.type === 'test' ? `
                 <div class="form-group">
                     <label>PDF Файл</label>
-                    <div class="pdf-drop-zone" onclick="document.getElementById('file-input-${s.id}').click()">
+                    <div class="pdf-drop-zone ${s.file ? 'has-file' : ''}" onclick="document.getElementById('file-input-${s.id}').click()">
                         ${s.file ? `✅ ${s.file.name}` : '📄 Выбрать PDF'}
                     </div>
                     <input type="file" id="file-input-${s.id}" accept=".pdf" style="display:none;" 
                            onchange="handleSectionFileSelect(${s.id}, event)">
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-top:10px;">
+                    <div class="form-group">
+                        <label>Кол-во вопросов</label>
+                        <input type="number" value="${s.questions_count || ''}" placeholder="Напр: 30" 
+                               oninput="updateSectionField(${s.id}, 'questions_count', parseInt(this.value) || 0)">
+                    </div>
+                    <div class="form-group" style="display:flex; align-items:flex-end;">
+                        <button type="button" class="btn btn-secondary" style="width:100%; height:40px;" 
+                                onclick="openAnswerKeyEditor(${s.id})">
+                             🔑 Ключи ответов (${(s.questions_config || []).filter(q => q.correct_answer).length}/${s.questions_count || 0})
+                        </button>
+                    </div>
                 </div>
             ` : `
                 <div class="form-group">
@@ -1089,12 +1111,22 @@ window.updateSectionField = updateSectionField;
 
 function handleSectionFileSelect(id, event) {
     const file = event.target.files[0];
-    if (file && file.type === 'application/pdf') {
-        updateSectionField(id, 'file', file);
-        renderSections();
-    } else {
-        alert('Выберите PDF файл');
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+        alert('Пожалуйста, выберите PDF файл.');
+        event.target.value = '';
+        return;
     }
+
+    if (file.size > 20 * 1024 * 1024) { // 20 MB limit
+        alert('Файл слишком большой. Максимальный размер: 20 МБ.');
+        event.target.value = '';
+        return;
+    }
+
+    updateSectionField(id, 'file', file);
+    renderSections();
 }
 window.handleSectionFileSelect = handleSectionFileSelect;
 
@@ -1102,13 +1134,22 @@ async function saveSectionedTest() {
     const name = document.getElementById('sec-test-name')?.value?.trim();
     const language = document.getElementById('sec-test-language')?.value || 'KG';
     const isLinkOnly = document.getElementById('sec-test-is-link')?.checked || false;
-    const answersRaw = document.getElementById('sec-test-answers')?.value?.trim();
 
     if (!name) { alert('Введите название теста'); return; }
     if (_testSections.length === 0) { alert('Добавьте хотя бы один раздел'); return; }
-    if (!answersRaw) { alert('Введите ключ ответов'); return; }
 
-    const answers = answersRaw.split(',').map(a => a.trim().toUpperCase()).filter(a => a);
+    // Validation: All test sections must have PDF and all keys set
+    for (const s of _testSections) {
+        if (s.type === 'test') {
+            if (!s.file) { alert(`Загрузите PDF для раздела "${s.title || 'без названия'}"`); return; }
+            if (!s.questions_count || s.questions_count <= 0) { alert(`Укажите кол-во вопросов для раздела "${s.title}"`); return; }
+            
+            const answered = (s.questions_config || []).filter(q => q.correct_answer).length;
+            if (answered < s.questions_count) {
+                if (!confirm(`В разделе "${s.title}" указаны не все ключи (${answered}/${s.questions_count}). Продолжить сохранение?`)) return;
+            }
+        }
+    }
     
     const submitBtn = document.getElementById('save-sec-test-btn');
     const origText = submitBtn.textContent;
@@ -1145,6 +1186,8 @@ async function saveSectionedTest() {
                     .getPublicUrl(fileName);
 
                 sectionItem.pdf_url = urlData.publicUrl;
+                sectionItem.questions_count = s.questions_count;
+                sectionItem.questions_config = s.questions_config;
             } else {
                 sectionItem.video_url = s.videoUrl;
             }
@@ -1154,13 +1197,21 @@ async function saveSectionedTest() {
 
         submitBtn.textContent = '⏳ Сохранение в базу...';
 
+        // Flatten answer_key for compatibility with old grading logic if needed
+        const flatAnswerKey = [];
+        sectionsData.forEach(s => {
+            if (s.type === 'test' && s.questions_config) {
+                s.questions_config.forEach(q => flatAnswerKey.push(q.correct_answer || ''));
+            }
+        });
+
         const testData = {
             name,
             language,
             is_link_only: isLinkOnly,
-            answer_key: answers,
+            answer_key: flatAnswerKey,
             sections: sectionsData,
-            is_pdf: true, // Marker for new layout
+            is_pdf: true, 
             duration: sectionsData.reduce((acc, s) => acc + (s.timer_seconds / 60), 0),
             created_at: new Date().toISOString()
         };
@@ -1175,7 +1226,8 @@ async function saveSectionedTest() {
         
         // Reset form
         _testSections = [];
-        document.getElementById('sectioned-test-form').reset();
+        const form = document.getElementById('sectioned-test-form');
+        if (form) form.reset();
         renderSections();
         loadAdminTests();
 
@@ -1188,6 +1240,140 @@ async function saveSectionedTest() {
     }
 }
 window.saveSectionedTest = saveSectionedTest;
+
+// ── Answer Key Editor State & Logic ──
+let _akState = {
+    sectionId: null,
+    pdfUrl: null
+};
+
+async function openAnswerKeyEditor(sectionId) {
+    const section = _testSections.find(s => s.id === sectionId);
+    if (!section) return;
+
+    _akState.sectionId = sectionId;
+    
+    // Set PDF Preview
+    const iframe = document.getElementById('ak-pdf-iframe');
+    const placeholder = document.getElementById('ak-pdf-placeholder');
+    
+    if (section.file) {
+        const fileUrl = URL.createObjectURL(section.file);
+        iframe.src = fileUrl;
+        iframe.style.display = 'block';
+        placeholder.style.display = 'none';
+        _akState.pdfUrl = fileUrl;
+    } else {
+        iframe.src = '';
+        iframe.style.display = 'none';
+        placeholder.style.display = 'flex';
+    }
+
+    document.getElementById('ak-editor-section-name').textContent = section.title || `Раздел #${_testSections.indexOf(section) + 1}`;
+    document.getElementById('ak-editor-overlay').classList.add('active');
+    
+    // Ensure questions_config matches questions_count
+    syncQuestionsConfig(section);
+    renderAnswerKeyList();
+}
+window.openAnswerKeyEditor = openAnswerKeyEditor;
+
+function syncQuestionsConfig(section) {
+    const count = section.questions_count || 0;
+    if (!section.questions_config) section.questions_config = [];
+    
+    if (section.questions_config.length < count) {
+        for (let i = section.questions_config.length; i < count; i++) {
+            section.questions_config.push({ correct_answer: '', options_count: 4 });
+        }
+    } else if (section.questions_config.length > count) {
+        section.questions_config = section.questions_config.slice(0, count);
+    }
+}
+
+function renderAnswerKeyList() {
+    const section = _testSections.find(s => s.id === _akState.sectionId);
+    if (!section) return;
+
+    const container = document.getElementById('ak-keys-list');
+    const config = section.questions_config || [];
+
+    if (config.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:40px;color:#999;">Укажите количество вопросов в разделе, чтобы начать</div>';
+        return;
+    }
+
+    container.innerHTML = config.map((q, i) => {
+        const options = ['A', 'B', 'C', 'D'];
+        if (q.options_count === 5) options.push('E');
+        
+        const displayOptions = { 'A': 'А', 'B': 'Б', 'C': 'В', 'D': 'Г', 'E': 'Д' };
+
+        const buttons = options.map(opt => `
+            <button class="ak-opt-btn ${q.correct_answer === opt ? 'selected' : ''}" 
+                    onclick="selectKeyOption(${i}, '${opt}')">
+                ${displayOptions[opt]}
+            </button>
+        `).join('');
+
+        return `
+            <div class="ak-key-row">
+                <div class="ak-key-num">${i + 1}.</div>
+                <div class="ak-options-row">
+                    ${buttons}
+                </div>
+                ${q.options_count === 4 
+                    ? `<button class="ak-add-d-btn" onclick="toggleOptionD(${i}, true)">+ Д</button>`
+                    : `<button class="ak-remove-d-btn" onclick="toggleOptionD(${i}, false)">✕</button>`
+                }
+            </div>
+        `;
+    }).join('');
+}
+
+function selectKeyOption(qIdx, option) {
+    const section = _testSections.find(s => s.id === _akState.sectionId);
+    if (!section) return;
+
+    section.questions_config[qIdx].correct_answer = option;
+    renderAnswerKeyList();
+    // Debounced UI update for the main section builder (counter update)
+    renderSections();
+}
+window.selectKeyOption = selectKeyOption;
+
+function toggleOptionD(qIdx, enable) {
+    const section = _testSections.find(s => s.id === _akState.sectionId);
+    if (!section) return;
+
+    section.questions_config[qIdx].options_count = enable ? 5 : 4;
+    if (!enable && section.questions_config[qIdx].correct_answer === 'E') {
+        section.questions_config[qIdx].correct_answer = '';
+    }
+    renderAnswerKeyList();
+}
+window.toggleOptionD = toggleOptionD;
+
+function toggleBulkOptionD(enable) {
+    const section = _testSections.find(s => s.id === _akState.sectionId);
+    if (!section) return;
+
+    section.questions_config.forEach(q => {
+        q.options_count = enable ? 5 : 4;
+        if (!enable && q.correct_answer === 'E') q.correct_answer = '';
+    });
+    renderAnswerKeyList();
+}
+window.toggleBulkOptionD = toggleBulkOptionD;
+
+function closeAnswerKeyEditor() {
+    document.getElementById('ak-editor-overlay').classList.remove('active');
+    if (_akState.pdfUrl) {
+        URL.revokeObjectURL(_akState.pdfUrl);
+        _akState.pdfUrl = null;
+    }
+}
+window.closeAnswerKeyEditor = closeAnswerKeyEditor;
 
 // =====================================================
 // CMS Settings — Individual key save/load
