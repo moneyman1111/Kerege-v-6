@@ -501,12 +501,6 @@
   object-fit: contain;
 }
 
-/* Explanation field */
-.tc-explanation {
-  border-left: 3px solid var(--tc-info);
-  padding-left: 12px;
-}
-
 /* ============================================================
    IMPORT PANEL
    ============================================================ */

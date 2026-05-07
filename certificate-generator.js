@@ -13,72 +13,42 @@
     function parseScoreSections(student) {
         const ta = student.topic_analysis;
         const ort = student.ort_score || student.scaled_score || 0;
-        const total = student.total_questions || 150;
-        const raw = student.raw_score || student.correct_count || 0;
+        const sections = {
+            'Математика I часть': { correct: 0, total: 0 },
+            'Математика II часть': { correct: 0, total: 0 },
+            'Кыргыз тили (Жалпы)': { correct: 0, total: 0 },
+            'Практикалык грамматика': { correct: 0, total: 0 },
+            'Окшоштуктар (Аналогия)': { correct: 0, total: 0 },
+            'Текстти окуу жана түшүнүү': { correct: 0, total: 0 }
+        };
 
-        // Defaults
-        let mathTotal = 60, mathPart1 = 0, mathPart2 = 0;
-        let kyrgyzTotal = 90, analogiya = 0, okuup = 0, grammatika = 0;
-        let mathScore = 0, kyrgyzScore = 0;
-
-        if (ta && Array.isArray(ta) && ta.length > 0) {
+        if (ta && Array.isArray(ta)) {
             ta.forEach(t => {
-                const name = (t.topic || '').toLowerCase();
-                const correct = t.correct || 0;
-                const tot = t.total || 0;
-
-                if (name.includes('алгебра') || name.includes('геометр') || name.includes('матем') ||
-                    name.includes('i бөлүк') || name.includes('бөлүм 1') || name.includes('часть 1') ||
-                    name.includes('math') || name.includes('1-бөлүк')) {
-                    mathPart1 += correct;
-                    mathScore += correct;
-                } else if (name.includes('ii бөлүк') || name.includes('бөлүм 2') || name.includes('часть 2') ||
-                    name.includes('2-бөлүк') || name.includes('логика') || name.includes('арифм')) {
-                    mathPart2 += correct;
-                    mathScore += correct;
-                } else if (name.includes('аналог') || name.includes('analogy')) {
-                    analogiya += correct;
-                    kyrgyzScore += correct;
-                } else if (name.includes('окуп') || name.includes('текст') || name.includes('чтен') ||
-                    name.includes('comprehension') || name.includes('reading')) {
-                    okuup += correct;
-                    kyrgyzScore += correct;
-                } else if (name.includes('грамм') || name.includes('grammar') || name.includes('синтак') ||
-                    name.includes('морфол') || name.includes('лексик')) {
-                    grammatika += correct;
-                    kyrgyzScore += correct;
-                }
+                const topicName = (t.topic || '').trim();
+                if (!sections[topicName]) return;
+                const correct = Number((t.weighted_correct !== undefined ? t.weighted_correct : (t.correct || 0)).toFixed(2));
+                const total = Number((t.weighted_total !== undefined ? t.weighted_total : (t.total || 0)).toFixed(2));
+                sections[topicName].correct += correct;
+                sections[topicName].total += total;
             });
-
-            // If nothing matched, split evenly by question count proportions
-            if (mathScore === 0 && kyrgyzScore === 0 && raw > 0) {
-                mathScore = Math.round(raw * (mathTotal / total));
-                kyrgyzScore = raw - mathScore;
-                mathPart1 = Math.round(mathScore / 2);
-                mathPart2 = mathScore - mathPart1;
-                analogiya = Math.round(kyrgyzScore / 3);
-                okuup = Math.round(kyrgyzScore / 3);
-                grammatika = kyrgyzScore - analogiya - okuup;
-            }
-        } else if (raw > 0) {
-            // No topic_analysis: proportional split
-            mathScore = Math.round(raw * (mathTotal / total));
-            kyrgyzScore = raw - mathScore;
-            mathPart1 = Math.round(mathScore / 2);
-            mathPart2 = mathScore - mathPart1;
-            analogiya = Math.round(kyrgyzScore / 3);
-            okuup = Math.round(kyrgyzScore / 3);
-            grammatika = kyrgyzScore - analogiya - okuup;
         }
+
+        const mathPart1 = Number(sections['Математика I часть'].correct.toFixed(2));
+        const mathPart2 = Number(sections['Математика II часть'].correct.toFixed(2));
+        const kyrgyzGeneral = Number(sections['Кыргыз тили (Жалпы)'].correct.toFixed(2));
+        const grammatika = Number(sections['Практикалык грамматика'].correct.toFixed(2));
+        const analogiya = Number(sections['Окшоштуктар (Аналогия)'].correct.toFixed(2));
+        const okuup = Number(sections['Текстти окуу жана түшүнүү'].correct.toFixed(2));
+        const mathTotal = Number((sections['Математика I часть'].total + sections['Математика II часть'].total).toFixed(2));
+        const kyrgyzTotal = Number((sections['Кыргыз тили (Жалпы)'].total + sections['Практикалык грамматика'].total + sections['Окшоштуктар (Аналогия)'].total + sections['Текстти окуу жана түшүнүү'].total).toFixed(2));
 
         return {
             ort,
             mathTotal,
-            mathScore,
             mathPart1,
             mathPart2,
             kyrgyzTotal,
-            kyrgyzScore,
+            kyrgyzScore: kyrgyzGeneral,
             analogiya,
             okuup,
             grammatika
@@ -209,14 +179,18 @@
             ? new Date(student.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
             : new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
 
-        const photoHtml = student.photo_url
-            ? `<img src="${student.photo_url}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;" crossorigin="anonymous"/>`
-            : `<svg viewBox="0 0 160 190" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;">
+        const photoHtml = `
+            <svg viewBox="0 0 160 190" xmlns="http://www.w3.org/2000/svg" style="position:absolute;inset:0;width:100%;height:100%;">
                 <rect width="160" height="190" fill="#f0f0f0" rx="6"/>
                 <circle cx="80" cy="72" r="34" fill="#ccc"/>
                 <ellipse cx="80" cy="160" rx="55" ry="38" fill="#ccc"/>
                 <text x="80" y="185" text-anchor="middle" font-size="11" fill="#aaa" font-family="Arial">Фото жок</text>
-               </svg>`;
+            </svg>
+            ${student.photo_url
+                ? `<img src="${student.photo_url}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:6px;" crossorigin="anonymous" onerror="this.remove()">`
+                : ''
+            }
+        `;
 
         const goodLines = boxes.good.map(l => `<div style="margin-bottom:5px;font-size:11px;">• ${l}</div>`).join('');
         const badLines  = boxes.bad.map(l  => `<div style="margin-bottom:5px;font-size:11px;">• ${l}</div>`).join('');
@@ -322,38 +296,47 @@
                 <span style="font-size:15px; font-weight:800; color:#8B0000; border-bottom:1.5px solid #555; padding: 0 60px 2px 6px;">&nbsp;${scores.ort}&nbsp;/&nbsp;245</span>
             </div>
 
-            <!-- SCORE TABLE -->
+            <!-- SCORE TABLE (новая структура разделов по требованиям) -->
             <table class="score-table">
                 <tr>
-                    <td rowspan="3" style="font-style:italic; font-weight:600; font-size:11px; text-align:left; padding:5px 7px; width:110px;">1-сынамык тест:</td>
-                    <td rowspan="2" style="font-weight:700; width:90px;">Жалпы баллы:</td>
-                    <td colspan="5" style="font-size:11px;">Ар бир бөлүмдөн канча суроого туура жооп бериди:</td>
+                    <th style="text-align:left; padding:6px 8px;">Раздел</th>
+                    <th style="width:110px;">Правильных (вес)</th>
+                    <th>Максимум (вес)</th>
                 </tr>
                 <tr>
-                    <td colspan="2">Математика</td>
-                    <td colspan="3">Кыргыз тил</td>
+                    <td style="text-align:left; font-weight:700;">Математика I часть</td>
+                    <td>${scores.mathPart1 ? scores.mathPart1 : 0}</td>
+                    <td>${scores.mathTotal ? scores.mathTotal : ''}</td>
                 </tr>
                 <tr>
-                    <td style="font-size:12px; font-weight:700;">${scores.ort} /</td>
-                    <td colspan="2">${scores.mathScore} / ${scores.mathTotal}</td>
-                    <td colspan="3">${scores.kyrgyzScore} / ${scores.kyrgyzTotal}</td>
+                    <td style="text-align:left; font-weight:700;">Математика II часть</td>
+                    <td>${scores.mathPart2 ? scores.mathPart2 : 0}</td>
+                    <td>${scores.mathTotal ? scores.mathTotal : ''}</td>
                 </tr>
                 <tr>
-                    <td class="red-bg" rowspan="2">"Кереге" окуу борбору</td>
+                    <td style="text-align:left; font-weight:700;">Кыргыз тили (Жалпы)</td>
+                    <td>${scores.kyrgyzScore ? scores.kyrgyzScore : 0}</td>
+                    <td>${scores.kyrgyzTotal ? scores.kyrgyzTotal : ''}</td>
+                </tr>
+                <tr>
+                    <td style="text-align:left;">Практикалык грамматика</td>
+                    <td>${scores.grammatika ? scores.grammatika : 0}</td>
                     <td></td>
-                    <td>I бөлүк</td>
-                    <td>II бөлүк</td>
-                    <td>Аналогия</td>
-                    <td>Окуп түшүнүү</td>
-                    <td>Грамматика</td>
                 </tr>
                 <tr>
+                    <td style="text-align:left;">Окшоштуктар (Аналогия)</td>
+                    <td>${scores.analogiya ? scores.analogiya : 0}</td>
                     <td></td>
-                    <td>${scores.mathPart1} /</td>
-                    <td>${scores.mathPart2} /</td>
-                    <td>${scores.analogiya} /</td>
-                    <td>${scores.okuup} /</td>
-                    <td>${scores.grammatika} /</td>
+                </tr>
+                <tr>
+                    <td style="text-align:left;">Текстти окуу жана түшүнүү</td>
+                    <td>${scores.okuup ? scores.okuup : 0}</td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td style="font-weight:800;">Жалпы (взвешенный балл)</td>
+                    <td style="font-weight:800; color:#8B0000;">${student.weighted_score !== undefined ? student.weighted_score : (scores.ort || 0)}</td>
+                    <td>${student.max_weight !== undefined ? student.max_weight : ''}</td>
                 </tr>
             </table>
 

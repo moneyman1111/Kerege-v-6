@@ -575,17 +575,19 @@ async function startTest() {
 
 function startLegacyTest() {
     const isPDFTest = !!(currentTest.is_pdf && currentTest.pdf_url);
+    const optionCounts = Array.isArray(currentTest.option_counts) ? currentTest.option_counts : [];
+    const config = (currentTest.answer_key || []).map((_, idx) => ({ options_count: optionCounts[idx] || 4 }));
     if (isPDFTest) {
         document.getElementById('image-test-layout').style.display = 'none';
         document.getElementById('pdf-test-layout').style.display = 'block';
         const pdfIframe = document.getElementById('pdf-iframe');
         if (pdfIframe) pdfIframe.src = currentTest.pdf_url;
-        generateAnswerGrid(currentTest.answer_key?.length || 30, 'pdf-answer-grid');
+        generateAnswerGridFromConfig(config, 'pdf-answer-grid');
     } else {
         document.getElementById('image-test-layout').style.display = 'block';
         document.getElementById('pdf-test-layout').style.display = 'none';
         updateTestImage();
-        generateAnswerGrid(currentTest.answer_key?.length || 30, 'answer-grid');
+        generateAnswerGridFromConfig(config, 'answer-grid');
     }
     startTimer(currentTest.duration * 60);
 }
@@ -820,7 +822,7 @@ function generateAnswerGrid(questionCount, targetGridId, startIndex = 0) {
     // Legacy fallback or sections with only count
     const config = [];
     for (let i = 0; i < questionCount; i++) {
-        config.push({ options_count: 5 }); // Default to 5 for legacy ORT
+        config.push({ options_count: 4 });
     }
     generateAnswerGridFromConfig(config, targetGridId, startIndex);
 }
@@ -1084,7 +1086,9 @@ async function submitTest() {
     }
 
     // Prepare submission data for Supabase
+    const totalQuestions = (currentTest.answer_key || []).length;
     const submission = {
+        test_id: currentTest.id,
         first_name: studentData.firstName,
         last_name: studentData.lastName,
         whatsapp: studentData.whatsapp,
@@ -1096,31 +1100,47 @@ async function submitTest() {
         ort_score: results.score,  // Changed from scaled_score to ort_score
         raw_score: results.correct,
         correct_count: results.correct,  // Added for compatibility
-        total_questions: currentTest.answer_key.length,
+        weighted_score: results.weighted_score,
+        max_weight: results.max_weight,
+        percent: results.percent,
+        total_questions: totalQuestions,
         duration_seconds: getTestDuration(),
         topic_analysis: topicAnalysis,
-        test_language: 'RU',  // Added required field
-        test_type: 'standard'  // Added required field
-        // created_at will be set automatically by database
+        test_language: currentTest.language || 'RU',
+        test_type: currentTest.test_type || 'standard',
+        partial_answers: answers,
+        status: 'completed',
+        end_time: new Date().toISOString()
     };
 
     try {
-        // Save to Supabase
+        // Save to Supabase and keep single record from startTest()
         if (supabaseApp) {
-            const { data, error } = await supabaseApp
-                .from('test_results') // Changed back to table, not view
-                .insert([submission]);
+            let error = null;
+            if (resultId) {
+                const res = await supabaseApp
+                    .from('test_results')
+                    .update(submission)
+                    .eq('id', resultId);
+                error = res.error;
+            } else {
+                const res = await supabaseApp
+                    .from('test_results')
+                    .insert([submission])
+                    .select('id')
+                    .single();
+                error = res.error;
+                if (!error && res.data) resultId = res.data.id;
+            }
 
             if (error) {
                 console.error('Supabase error:', error);
                 throw new Error(error.message);
             }
-
-            console.log('Test result saved:', data);
         }
 
-        // Show congratulations modal
-        showCongratsModal();
+        // Show immediate detailed result feedback for student
+        showPostTestResults(results);
 
     } catch (error) {
         console.error('Error submitting test:', error);
@@ -1131,6 +1151,8 @@ async function submitTest() {
 
 // Show Congratulations Modal (replaces old success modal)
 async function showCongratsModal() {
+    const postOverlay = document.getElementById('post-test-overlay');
+    if (postOverlay) postOverlay.remove();
     const overlay = document.getElementById('congrats-modal');
     if (!overlay) { showLeadGenerationMessage(); return; }
 
@@ -1215,20 +1237,24 @@ function calculateTopicAnalysis() {
     }
 
     const topicStats = {};
-    const answerKey = currentTest.answer_key;
+    const answerKey = currentTest.answer_key || [];
+    const weights = currentTest.weights || [];
 
-    // Analyze each question
+    // Analyze each question (also account weights for weighted analysis)
     for (let i = 1; i <= answerKey.length; i++) {
-        const topic = currentTest.topics[i - 1] || 'Общие';
+        const topic = currentTest.topics ? (currentTest.topics[i - 1] || 'Общие') : 'Общие';
         const isCorrect = answers[i] === answerKey[i - 1];
+        const w = parseFloat(weights[i - 1]) || 1;
 
         if (!topicStats[topic]) {
-            topicStats[topic] = { correct: 0, total: 0 };
+            topicStats[topic] = { correct: 0, total: 0, weighted_correct: 0, weighted_total: 0 };
         }
 
         topicStats[topic].total++;
+        topicStats[topic].weighted_total += w;
         if (isCorrect) {
             topicStats[topic].correct++;
+            topicStats[topic].weighted_correct += w;
         }
     }
 
@@ -1237,38 +1263,91 @@ function calculateTopicAnalysis() {
         topic,
         correct: stats.correct,
         total: stats.total,
-        percentage: Math.round((stats.correct / stats.total) * 100)
+        weighted_correct: Number((stats.weighted_correct || 0).toFixed(2)),
+        weighted_total: Number((stats.weighted_total || 0).toFixed(2)),
+        percentage: stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0,
+        weighted_percentage: stats.weighted_total > 0 ? Math.round((stats.weighted_correct / stats.weighted_total) * 100) : 0
     }));
 }
 
 // Auto-Grading System
 function calculateScore() {
-    const answerKey = currentTest.answer_key;
+    const answerKey = currentTest.answer_key || [];
+    const weights = currentTest.weights || [];
     let correct = 0;
+    let weightedScore = 0;
     const total = answerKey.length;
 
-    // Count correct answers
+    // Sum weights max
+    const maxWeight = answerKey.reduce((acc, _, idx) => acc + (parseFloat(weights[idx]) || 1), 0);
+
+    // Count correct answers and compute weighted sum
     for (let i = 1; i <= total; i++) {
         const finalAnswer = answers[i];
+        const w = parseFloat(weights[i - 1]) || 1;
         if (finalAnswer === answerKey[i - 1]) {
             correct++;
+            weightedScore += w;
         }
     }
 
-    // Calculate ORT scaled score
-    const ortScore = calculateORTScore(correct, total);
+    // Prevent floating point noise: round to 2 decimals for storage/display
+    const weightedScoreRounded = Number(weightedScore.toFixed(2));
+    const maxWeightRounded = Number(maxWeight.toFixed(2));
+
+    // Calculate percentage based on weighted score
+    const percent = maxWeightRounded > 0 ? (weightedScoreRounded / maxWeightRounded) * 100 : 0;
+
+    // Calculate ORT scaled score using weighted percent
+    const ortScore = calculateORTScore(percent);
 
     return {
         score: ortScore,
         correct,
-        total
+        total,
+        weighted_score: weightedScoreRounded,
+        max_weight: maxWeightRounded,
+        percent: Number(percent.toFixed(2))
     };
 }
 
-function calculateORTScore(correct, total) {
-    // Calculate percentage
-    const percent = (correct / total) * 100;
+function showPostTestResults(results) {
+    const old = document.getElementById('post-test-overlay');
+    if (old) old.remove();
 
+    const answerKey = currentTest.answer_key || [];
+    const letterMap = { A: 'А', B: 'Б', C: 'В', D: 'Г', E: 'Д' };
+
+    const listHtml = answerKey.map((correct, idx) => {
+        const qNum = idx + 1;
+        const selected = answers[qNum] || '—';
+        const isCorrect = selected === correct;
+        return `
+            <div style="padding:10px 12px;border-radius:8px;margin-bottom:8px;background:${isCorrect ? '#ecfdf5' : '#fef2f2'};border:1px solid ${isCorrect ? '#a7f3d0' : '#fecaca'};">
+                <strong style="color:${isCorrect ? '#047857' : '#b91c1c'};">${qNum}. ${isCorrect ? 'Верно' : 'Ошибка'}</strong>
+                <div style="font-size:13px;color:#374151;margin-top:4px;">Ваш ответ: <b>${letterMap[selected] || selected}</b> · Верный: <b>${letterMap[correct] || correct}</b></div>
+            </div>
+        `;
+    }).join('');
+
+    const overlay = document.createElement('div');
+    overlay.id = 'post-test-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+    overlay.innerHTML = `
+        <div style="background:#fff;border-radius:14px;max-width:760px;width:100%;max-height:90vh;overflow:auto;padding:20px;">
+            <h3 style="margin:0 0 10px;">Результаты теста</h3>
+            <div style="font-size:15px;margin-bottom:12px;">
+                Балл ОРТ: <b>${results.score}</b> · Правильно: <b>${results.correct}/${results.total}</b> · Взвешенно: <b>${results.weighted_score}/${results.max_weight}</b>
+            </div>
+            <div>${listHtml}</div>
+            <button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="showCongratsModal()">Закрыть и продолжить</button>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+}
+
+function calculateORTScore(percent) {
+    // percent expected 0..100
     // ORT formula: ScaledScore = (Percent / 100) * 190 + 55
     let scaledScore = Math.round((percent / 100) * 190 + 55);
 

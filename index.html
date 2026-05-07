@@ -610,11 +610,7 @@
                                     </div>
                                 </div>
 
-                                <div class="form-group" style="margin-top:24px;">
-                                    <label>Общий ключ ответов (через запятую)</label>
-                                    <textarea id="sec-test-answers" placeholder="A, B, C, D, E..." rows="3" required></textarea>
-                                    <small style="color:#999;">Введите правильные ответы для всех разделов в правильном порядке.</small>
-                                </div>
+                                <!-- Общий ключ ответов удалён — система использует ключ из редактора вопросов -->
 
                                 <button type="submit" class="btn btn-primary" id="save-sec-test-btn" style="width:100%;margin-top:20px;background:#e31e24;height:50px;font-size:16px;font-weight:700;">
                                     🚀 Сохранить и Опубликовать Тест
@@ -669,7 +665,7 @@
 
                             <div class="tc-import-tab active" id="tc-imp-excel">
                                 <p style="font-size:13px;color:#666;margin:0;">Загрузите .xlsx файл. Колонки:
-                                    <strong>text, A, B, C, D, answer, topic, weight, section, explanation</strong>
+                                    <strong>text, A, B, C, D, E, answer, topic, weight, section</strong>
                                 </p>
                                 <div class="tc-import-drop" onclick="document.getElementById('tc-excel-input').click()">
                                     📊 Нажмите чтобы выбрать Excel файл
@@ -682,7 +678,7 @@
                                 <p style="font-size:13px;color:#666;margin:0;">Загрузите .json файл со структурой:</p>
                                 <div class="tc-json-hint">[\n {\n "text": "Вопрос...",\n "A": "Вариант", "B":
                                     "Вариант",\n "C": "Вариант", "D": "Вариант",\n "answer": "A",\n "topic":
-                                    "Алгебра",\n "weight": 1,\n "explanation": "Пояснение..."\n }\n]</div>
+                                    "Алгебра",\n "weight": 1\n }\n]</div>
                                 <div class="tc-import-drop" onclick="document.getElementById('tc-json-input').click()">
                                     { } Нажмите чтобы выбрать JSON файл
                                 </div>
@@ -870,7 +866,7 @@
                         </div>
 
                         <!-- Existing problems/content blocks -->
-                        <h3 style="margin-top:28px;margin-bottom:12px;">📋 Блоки «Таанышпы?»</h3>
+                        <h3 style="margin-top:28px;margin-bottom:12px;">📋 Блоки «Таанышпы?»</h2>
                         <div id="admin-cms-list"
                             style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
                             <p>Загрузка контента...</p>

@@ -12,7 +12,7 @@
   // ──────────────────────────────────────────────────────────
   // STATE
   // ──────────────────────────────────────────────────────────
-  const ORT_SECTIONS = ['Математика I', 'Математика II', 'Аналогии', 'Чтение', 'Грамматика', 'Прочее'];
+  const ORT_SECTIONS = ['Математика I часть', 'Математика II часть', 'Кыргыз тили (Жалпы)', 'Практикалык грамматика', 'Окшоштуктар (Аналогия)', 'Текстти окуу жана түшүнүү', 'Прочее'];
 
   let tc = {
     draftId: null,
@@ -37,13 +37,13 @@
     return {
       id: Date.now() + Math.random(),
       text: '',
-      options: { A: '', B: '', C: '', D: '' },
+      options: { A: '', B: '', C: '', D: '', E: '' }, // E = Д
       correctAnswer: '',
       topic: '',
       weight: 1,
       section: '',
       imageUrl: '',
-      explanation: '',
+      hasOptionE: false, // Новый флаг для варианта Д
       ...overrides
     };
   }
@@ -198,6 +198,9 @@
       <div class="tc-card">
         <div class="tc-card-header">
           <h3>Вопрос №${idx + 1}</h3>
+          <button class="tc-btn tc-btn-ghost tc-btn-sm" style="margin-left:16px;" onclick="tcToggleOptionE()">
+            ${q.hasOptionE ? 'Убрать вариант Д' : 'Добавить вариант Д'}
+          </button>
           <div style="display:flex;gap:8px;align-items:center;">
             <button class="tc-btn tc-btn-ghost tc-btn-sm" onclick="tcDuplicateQuestion(${idx})" title="Дублировать">⧉ Копия</button>
             <button class="tc-btn tc-btn-sm" style="background:#fee2e2;color:#dc2626;" onclick="tcDeleteQuestion(${idx})" title="Удалить">🗑 Удалить</button>
@@ -213,7 +216,7 @@
             </div>
             <div class="tc-field" style="max-width:100px;">
               <label>Вес (баллы)</label>
-              <input type="number" id="tc-q-weight" value="${q.weight}" min="0.5" step="0.5" oninput="tcAutoSaveTrigger()">
+              <input type="number" id="tc-q-weight" value="${q.weight}" min="0.1" step="0.1" oninput="tcAutoSaveTrigger()">
             </div>
             <div class="tc-field">
               <label>Раздел</label>
@@ -247,7 +250,7 @@
           <div class="tc-field" style="margin-bottom:4px;"><label>Варианты ответов</label></div>
           <div class="tc-options-grid" id="tc-options-grid">
             ${['A','B','C','D'].map(letter => `
-              <div class="tc-option-row ${q.correctAnswer === letter ? 'correct' : ''}" 
+              <div class="tc-option-row ${q.correctAnswer === letter ? 'correct' : ''}"
                    id="tc-opt-row-${letter}" onclick="tcSetCorrect('${letter}')">
                 <div class="tc-option-label">${letter}</div>
                 <input type="text" class="tc-option-input" id="tc-opt-${letter}"
@@ -260,18 +263,25 @@
                        onclick="event.stopPropagation(); tcSetCorrect('${letter}')">
               </div>
             `).join('')}
+            ${q.hasOptionE ? `
+              <div class="tc-option-row ${q.correctAnswer === 'E' ? 'correct' : ''}"
+                   id="tc-opt-row-E" onclick="tcSetCorrect('E')">
+                <div class="tc-option-label">Д</div>
+                <input type="text" class="tc-option-input" id="tc-opt-E"
+                       value="${escHtml(q.options['E'])}"
+                       placeholder="Вариант Д"
+                       onclick="event.stopPropagation()"
+                       oninput="tcAutoSaveTrigger()">
+                <input type="radio" name="tc-correct" class="tc-correct-radio"
+                       value="E" ${q.correctAnswer === 'E' ? 'checked' : ''}
+                       onclick="event.stopPropagation(); tcSetCorrect('E')">
+              </div>
+            ` : ''}
           </div>
           <p style="font-size:12px;color:var(--tc-muted);margin:4px 0 14px;">
             Кликните на вариант или на ○ чтобы отметить правильный ответ
           </p>
 
-          <!-- Пояснение (Түшүндүрмө) -->
-          <div class="tc-field tc-explanation">
-            <label>Пояснение / Түшүндүрмө</label>
-            <textarea id="tc-q-explanation" rows="3" 
-                      placeholder="Объяснение решения, которое увидит студент после теста..."
-                      oninput="tcAutoSaveTrigger()">${escHtml(q.explanation)}</textarea>
-          </div>
         </div>
       </div>
 
@@ -314,13 +324,25 @@
     if (get('tc-q-weight'))      q.weight      = parseFloat(get('tc-q-weight').value) || 1;
     if (get('tc-q-section'))     q.section     = get('tc-q-section').value;
     if (el)                       q.text        = el.innerHTML;
-    if (get('tc-q-explanation')) q.explanation = get('tc-q-explanation').value;
-
-    ['A','B','C','D'].forEach(l => {
+    ['A','B','C','D','E'].forEach(l => {
       const o = get(`tc-opt-${l}`);
       if (o) q.options[l] = o.value;
     });
   }
+
+  window.tcToggleOptionE = function() {
+    const idx = tc.activeIdx;
+    if (idx < 0 || idx >= tc.questions.length) return;
+    const q = tc.questions[idx];
+    q.hasOptionE = !q.hasOptionE;
+    if (!q.hasOptionE) {
+      q.options['E'] = '';
+      if (q.correctAnswer === 'E') q.correctAnswer = '';
+    }
+    renderEditor(idx);
+    renderSidebar();
+    tcAutoSaveTrigger();
+  };
 
   // ──────────────────────────────────────────────────────────
   // RICH TEXT FORMATTING
@@ -371,7 +393,7 @@
     if (idx < 0) return;
     tc.questions[idx].correctAnswer = letter;
     // Update UI without full re-render
-    ['A','B','C','D'].forEach(l => {
+    ['A','B','C','D','E'].forEach(l => {
       const row = document.getElementById(`tc-opt-row-${l}`);
       const radio = document.querySelector(`input[name="tc-correct"][value="${l}"]`);
       if (row)  row.classList.toggle('correct', l === letter);
@@ -503,7 +525,7 @@
       if (field === 'topic')   q.topic   = value;
       if (field === 'weight')  q.weight  = parseFloat(value) || 1;
       if (field === 'section') q.section = value;
-      if (field === 'correctAnswer' && ['A','B','C','D'].includes(value.toUpperCase()))
+      if (field === 'correctAnswer' && ['A','B','C','D','E'].includes(value.toUpperCase()))
         q.correctAnswer = value.toUpperCase();
     });
 
@@ -775,12 +797,13 @@
         B: row['B'] || row['option_b'] || row['б'] || '',
         C: row['C'] || row['option_c'] || row['в'] || '',
         D: row['D'] || row['option_d'] || row['г'] || '',
+        E: row['E'] || row['option_e'] || row['д'] || '',
       },
       correctAnswer: (row['answer']  || row['ответ']    || row['correct']  || '').toString().toUpperCase().charAt(0),
       topic:         row['topic']    || row['тема']      || '',
       weight:        parseFloat(row['weight']  || row['вес'] || 1) || 1,
       section:       row['section'] || row['раздел']    || '',
-      explanation:   row['explanation'] || row['пояснение'] || row['түшүндүрмө'] || '',
+      hasOptionE:    !!(row['E'] || row['option_e'] || row['д']),
     }));
 
     if (tc.questions.length === 1 && !tc.questions[0].text) {
@@ -839,16 +862,12 @@
         <div class="tc-pv-qnum">Вопрос ${idx + 1} ${q.topic ? '· ' + q.topic : ''}</div>
         ${q.imageUrl ? `<img class="tc-pv-img" src="${q.imageUrl}" alt="Фото">` : ''}
         <div class="tc-pv-qtext">${q.text || '<em style="color:#999">Текст вопроса не заполнен</em>'}</div>
-        ${['A','B','C','D'].map(l => `
+        ${['A','B','C','D', ...(q.hasOptionE ? ['E'] : [])].map(l => `
           <div class="tc-pv-option">
-            <div class="tc-pv-option-label">${l}</div>
+            <div class="tc-pv-option-label">${l === 'E' ? 'Д' : l}</div>
             <span>${q.options[l] || '<em style="color:#aaa">—</em>'}</span>
           </div>
         `).join('')}
-        ${q.explanation ? `
-          <div class="tc-pv-explanation">
-            <strong>💡 Пояснение:</strong> ${q.explanation}
-          </div>` : ''}
       </div>`;
 
     if (mode === 'mobile') {
@@ -888,10 +907,10 @@
       // Build answer_key, topics, weights, photo_urls arrays
       const answerKey  = tc.questions.map(q => q.correctAnswer || 'A');
       const topics     = tc.questions.map(q => q.topic || '');
-      const weights    = tc.questions.map(q => q.weight || 1);
+      const weights    = tc.questions.map(q => parseFloat(q.weight) || 1);
+      const optionCounts = tc.questions.map(q => q.hasOptionE ? 5 : 4);
       const sections   = tc.questions.map(q => q.section || '');
       const photoUrls  = tc.questions.map(q => q.imageUrl || '');
-      const explanations = tc.questions.map(q => q.explanation || '');
       const optionsArr = tc.questions.map(q => q.options);
 
       const testData = {
@@ -902,9 +921,9 @@
         answer_key:   answerKey,
         topics:       topics,
         weights:      weights,
+        option_counts: optionCounts,
         sections:     sections,
         photo_urls:   photoUrls,
-        explanations: explanations,
         options:      optionsArr,
         question_texts: tc.questions.map(q => q.text),
         is_link_only: false,
@@ -965,13 +984,13 @@
       const n = (data.answer_key || []).length;
       tc.questions = Array.from({ length: n }, (_, i) => makeQuestion({
         text:          (data.question_texts || [])[i] || '',
-        options:       (data.options || [])[i]       || { A:'', B:'', C:'', D:'' },
+        options:       (data.options || [])[i]       || { A:'', B:'', C:'', D:'', E:'' },
         correctAnswer: (data.answer_key  || [])[i]   || '',
         topic:         (data.topics      || [])[i]   || '',
-        weight:        (data.weights     || [])[i]   || 1,
+        weight:        parseFloat((data.weights || [])[i]) || 1,
         section:       (data.sections    || [])[i]   || '',
         imageUrl:      (data.photo_urls  || [])[i]   || '',
-        explanation:   (data.explanations|| [])[i]   || '',
+        hasOptionE:    ((data.option_counts || [])[i] || 4) === 5,
       }));
 
       if (tc.questions.length === 0) tc.questions.push(makeQuestion());

@@ -1199,9 +1199,15 @@ async function saveSectionedTest() {
 
         // Flatten answer_key for compatibility with old grading logic if needed
         const flatAnswerKey = [];
+        const flatWeights = [];
+        const flatOptionCounts = [];
         sectionsData.forEach(s => {
             if (s.type === 'test' && s.questions_config) {
-                s.questions_config.forEach(q => flatAnswerKey.push(q.correct_answer || ''));
+                s.questions_config.forEach(q => {
+                    flatAnswerKey.push(q.correct_answer || '');
+                    flatWeights.push(Number((parseFloat(q.weight) || 1).toFixed(2)));
+                    flatOptionCounts.push((q.options_count || 4) === 5 ? 5 : 4);
+                });
             }
         });
 
@@ -1210,6 +1216,8 @@ async function saveSectionedTest() {
             language,
             is_link_only: isLinkOnly,
             answer_key: flatAnswerKey,
+            weights: flatWeights,
+            option_counts: flatOptionCounts,
             sections: sectionsData,
             is_pdf: true, 
             duration: sectionsData.reduce((acc, s) => acc + (s.timer_seconds / 60), 0),
@@ -1284,7 +1292,7 @@ function syncQuestionsConfig(section) {
     
     if (section.questions_config.length < count) {
         for (let i = section.questions_config.length; i < count; i++) {
-            section.questions_config.push({ correct_answer: '', options_count: 4 });
+            section.questions_config.push({ correct_answer: '', options_count: 4, weight: 1 });
         }
     } else if (section.questions_config.length > count) {
         section.questions_config = section.questions_config.slice(0, count);
@@ -1322,6 +1330,9 @@ function renderAnswerKeyList() {
                 <div class="ak-options-row">
                     ${buttons}
                 </div>
+                <input type="number" min="0.1" step="0.1" value="${q.weight || 1}" title="Вес вопроса"
+                       onchange="setQuestionWeight(${i}, this.value)"
+                       style="width:72px;height:38px;border:1px solid #d1d5db;border-radius:8px;padding:0 8px;font-weight:700;">
                 ${q.options_count === 4 
                     ? `<button class="ak-add-d-btn" onclick="toggleOptionD(${i}, true)">+ Д</button>`
                     : `<button class="ak-remove-d-btn" onclick="toggleOptionD(${i}, false)">✕</button>`
@@ -1353,6 +1364,13 @@ function toggleOptionD(qIdx, enable) {
     renderAnswerKeyList();
 }
 window.toggleOptionD = toggleOptionD;
+
+function setQuestionWeight(qIdx, value) {
+    const section = _testSections.find(s => s.id === _akState.sectionId);
+    if (!section || !section.questions_config[qIdx]) return;
+    section.questions_config[qIdx].weight = parseFloat(value) || 1;
+}
+window.setQuestionWeight = setQuestionWeight;
 
 function toggleBulkOptionD(enable) {
     const section = _testSections.find(s => s.id === _akState.sectionId);
